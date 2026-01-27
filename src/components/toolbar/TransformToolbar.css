@@ -1,0 +1,86 @@
+.tc-toolbar {
+    position: absolute;
+    left: 13px;
+    top: 12px;
+    display: flex;
+    flex-direction: row;
+    background: white;
+    border-radius: 6px;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+    outline: 5px solid rgba(0, 0, 0, 0.25);
+    outline-offset: -1px;
+    overflow: visible; /* ⬅️ FIX */
+    z-index: 2000;
+}
+
+.tc-btn {
+    width: 34px;
+    height: 34px;
+    font-size: 18px;
+    background: white;
+    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: rgba(32, 32, 32, 0.95);
+    user-select: none;
+    position: relative; /* ⬅️ cần cho tooltip */
+}
+
+/* border phải */
+.tc-btn:not(:last-child) {
+    border-right: 1px solid rgba(0, 0, 0, 0.15);
+}
+
+.tc-btn:hover {
+    background: rgba(0, 0, 0, 0.05);
+}
+
+.tc-btn.active {
+    background: rgba(0, 120, 255, 0.15);
+}
+
+/* ================= TOOLTIP ================= */
+
+.tc-btn::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    top: 110%; /* tooltip hiện phía dưới */
+    left: 50%;
+    transform: translateX(-50%);
+    white-space: nowrap;
+
+    background: rgba(0, 0, 0, 0.85);
+    color: white;
+    font-size: 12px;
+    padding: 4px 8px;
+    border-radius: 4px;
+
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s ease, transform 0.15s ease;
+    z-index: 3000;
+}
+
+/* mũi tên */
+.tc-btn::before {
+    content: "";
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 5px solid transparent;
+    border-bottom-color: rgba(0, 0, 0, 0.85);
+
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s ease;
+    z-index: 3000;
+}
+
+.tc-btn:hover::after,
+.tc-btn:hover::before {
+    opacity: 1;
+    transform: translateX(-50%) translateY(2px);
+}

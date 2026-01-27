@@ -1,0 +1,87 @@
+.object-panel {
+    position: absolute;
+    top: 13px;
+    left: 150px;
+
+    display: flex;
+    flex-direction: row;
+
+    height: 34px;              /* ⬅️ KHÓA chiều cao */
+    background: white;
+    border-radius: 6px;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+    outline: 5px solid rgba(0, 0, 0, 0.25);
+    outline-offset: -1px;
+    overflow: visible;
+    z-index: 2000;
+}
+
+.op-btn {
+    width: 34px;               /* ⬅️ button vuông */
+    height: 34px;
+
+    padding: 0;                /* ⬅️ QUAN TRỌNG */
+    margin: 0;
+
+    border: none;
+    background: white;
+    cursor: pointer;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    border-right: 1px solid rgba(0, 0, 0, 0.15);
+}
+
+.op-btn:last-child {
+    border-right: none;
+}
+
+
+.op-btn:hover {
+    background: rgba(0, 0, 0, 0.08);
+}
+
+.op-btn-active {
+    background: rgba(0, 120, 255, 0.15);
+}
+
+.op-btn::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    top: 110%;
+    left: 50%;
+    transform: translateX(-50%);
+    white-space: nowrap;
+
+    background: rgba(0, 0, 0, 0.85);
+    color: white;
+    font-size: 12px;
+    padding: 4px 8px;
+    border-radius: 4px;
+
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s ease, transform 0.15s ease;
+    z-index: 3000;
+}
+.op-btn::before {
+    content: "";
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 5px solid transparent;
+    border-bottom-color: rgba(0, 0, 0, 0.85);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s ease;
+    z-index: 3000;
+}
+.op-btn:hover::after,
+.op-btn:hover::before {
+    opacity: 1;
+    transform: translateX(-50%) translateY(2px);
+}
+

@@ -1,0 +1,4606 @@
+{
+    "name": "default",
+    "version": 8,
+    "owner": "vietbando",
+    "sources": {
+        "vietbando": {
+            "url": "https://images.daklak.gov.vn/Source/vt_vbddefault/306ec9b5-8146-4a83-9271-bd7b343a574a",
+            "type": "vector",
+            "minzoom": 0,
+            "maxzoom": 16
+        },
+        "building": {
+            "url": "https://images.daklak.gov.vn/Source/vt_building/306ec9b5-8146-4a83-9271-bd7b343a574a",
+            "type": "vector",
+            "minzoom": 0,
+            "maxzoom": 16
+        },
+        "vt_background": {
+            "url": "https://images.daklak.gov.vn/Source/vt_background/306ec9b5-8146-4a83-9271-bd7b343a574a",
+            "type": "vector",
+            "minzoom": 0,
+            "maxzoom": 10
+        },
+        "terrainSource": {
+            "type": "raster-dem",
+            "tiles": [
+                "https://images.daklak.gov.vn/vndem/raster/{z}/{x}/{y}.png"
+            ],
+            "minzoom": 10,
+            "maxzoom": 12
+        }
+    },
+    "sprite": "https://images.daklak.gov.vn/Sprite/sprite",
+    "glyphs": "https://images.daklak.gov.vn/Font/{fontstack}/{range}",
+    "layers": [
+        {
+            "id": "background",
+            "type": "background",
+            "paint": {
+                "background-color": "hsl(180, 3%, 94%)"
+            }
+        },
+        {
+            "id": "region_water_index",
+            "source": "vt_background",
+            "source-layer": "region_water_index",
+            "type": "fill",
+            "paint": {
+                "fill-color": "hsl(205, 70%, 68%)"
+            }
+        },
+        {
+            "id": "region-bathymetry-index",
+            "source": "vt_background",
+            "source-layer": "region_bathymetry_index",
+            "type": "fill",
+            "paint": {
+                "fill-color": "hsl(205, 77%, 35%)",
+                "fill-opacity": 0.15
+            }
+        },
+        {
+            "id": "region-vnisland-index",
+            "source": "vietbando",
+            "source-layer": "region_island_index",
+            "type": "fill",
+            "paint": {
+                "fill-opacity": 1,
+                "fill-color": "hsl(180, 3%, 94%)"
+            }
+        },
+        {
+            "id": "region-river-index",
+            "source": "vietbando",
+            "source-layer": "region_river_index",
+            "minzoom": 3,
+            "type": "fill",
+            "paint": {
+                "fill-color": "hsl(205, 70%, 68%)"
+            }
+        },
+        {
+            "id": "fill-vnairport-index",
+            "source": "vietbando",
+            "source-layer": "region_vnairport_index",
+            "minzoom": 5,
+            "type": "fill",
+            "paint": {
+                "fill-opacity": 1,
+                "fill-color": "hsl(215, 39%, 89%)"
+            }
+        },
+        {
+            "id": "fill-vnpark-index",
+            "source": "vietbando",
+            "source-layer": "region_vnpark_index",
+            "type": "fill",
+            "minzoom": 5,
+            "paint": {
+                "fill-opacity": 1,
+                "fill-color": "hsl(82, 50%, 75%)"
+            }
+        },
+        {
+            "id": "fill-vnbusstation-index",
+            "source": "vietbando",
+            "source-layer": "region_vnbusstation_index",
+            "minzoom": 10,
+            "type": "fill",
+            "paint": {
+                "fill-opacity": 1,
+                "fill-color": "hsl(215, 39%, 89%)"
+            }
+        },
+        {
+            "id": "fill-vnbuilding-index",
+            "source": "vietbando",
+            "source-layer": "region_vnbuilding_index",
+            "minzoom": 10,
+            "type": "fill",
+            "paint": {
+                "fill-opacity": 1,
+                "fill-color": [
+                    "match",
+                    [
+                        "get",
+                        "groupcode"
+                    ],
+                    5,
+                    "hsl(0, 100%, 94%)",
+                    6,
+                    "hsl(82, 50%, 75%)",
+                    "hsl(0, 0%, 90%)"
+                ]
+            }
+        },
+        {
+            "id": "line_vnriverline_index",
+            "source": "vietbando",
+            "source-layer": "line_vnriverline_index",
+            "minzoom": 12,
+            "type": "line",
+            "layout": {
+                "visibility": "visible",
+                "line-join": "round",
+                "line-cap": "round"
+            },
+            "paint": {
+                "line-color": "hsl(205, 70%, 68%)",
+                "line-opacity": {
+                    "base": 1,
+                    "stops": [
+                        [
+                            11,
+                            0.5
+                        ],
+                        [
+                            14,
+                            1
+                        ]
+                    ]
+                },
+                "line-width": {
+                    "base": 1,
+                    "stops": [
+                        [
+                            0,
+                            0
+                        ],
+                        [
+                            12,
+                            1
+                        ],
+                        [
+                            16,
+                            4
+                        ]
+                    ]
+                }
+            }
+        },
+        {
+            "id": "line-vntunnel-hemlo-index",
+            "type": "line",
+            "source": "vietbando",
+            "source-layer": "line_vntunnel_index",
+            "filter": [
+                "==",
+                "level",
+                3
+            ],
+            "minzoom": 13,
+            "layout": {
+                "visibility": "visible",
+                "line-cap": "square",
+                "line-join": "round"
+            },
+            "paint": {
+                "line-color": "hsl(0, 0%, 75%)",
+                "line-opacity": {
+                    "base": 1,
+                    "stops": [
+                        [
+                            13,
+                            0.5
+                        ],
+                        [
+                            18,
+                            0.5
+                        ]
+                    ]
+                },
+                "line-width": {
+                    "base": 1,
+                    "stops": [
+                        [
+                            0,
+                            0
+                        ],
+                        [
+                            13,
+                            0.4
+                        ],
+                        [
+                            14,
+                            2
+                        ],
+                        [
+                            15,
+                            4
+                        ],
+                        [
+                            16,
+                            5
+                        ],
+                        [
+                            17,
+                            5
+                        ],
+                        [
+                            18,
+                            7
+                        ],
+                        [
+                            19,
+                            9
+                        ],
+                        [
+                            20,
+                            14
+                        ]
+                    ]
+                }
+            }
+        },
+        {
+            "id": "line-vntunnel-huyenlo-index",
+            "type": "line",
+            "source": "vietbando",
+            "source-layer": "line_vntunnel_index",
+            "filter": [
+                "==",
+                "level",
+                2
+            ],
+            "minzoom": 9.5,
+            "layout": {
+                "visibility": "visible",
+                "line-cap": "square",
+                "line-join": "round"
+            },
+            "paint": {
+                "line-color": "hsl(0, 0%, 75%)",
+                "line-opacity": {
+                    "base": 1,
+                    "stops": [
+                        [
+                            9.5,
+                            0.5
+                        ],
+                        [
+                            18,
+                            0.5
+                        ]
+                    ]
+                },
+                "line-width": {
+                    "base": 1,
+                    "stops": [
+                        [
+                            0,
+                            0.1
+                        ],
+                        [
+                            11,
+                            0.5
+                        ],
+                        [
+                            12,
+                            1.5
+                        ],
+                        [
+                            13,
+                            2
+                        ],
+                        [
+                            14,
+                            3
+                        ],
+                        [
+                            15,
+                            5
+                        ],
+                        [
+                            16,
+                            6
+                        ],
+                        [
+                            17,
+                            8
+                        ],
+                        [
+                            18,
+                            10
+                        ],
+                        [
+                            19,
+                            15
+                        ],
+                        [
+                            20,
+                            20
+                        ]
+                    ]
+                }
+            }
+        },
+        {
+            "id": "line-vntunnel-tinhlo-index",
+            "type": "line",
+            "source": "vietbando",
+            "source-layer": "line_vntunnel_index",
+            "filter": [
+                "==",
+                "level",
+                1
+            ],
+            "minzoom": 6.5,
+            "layout": {
+                "visibility": "visible",
+                "line-cap": "square",
+                "line-join": "round"
+            },
+            "paint": {
+                "line-opacity": {
+                    "base": 1,
+                    "stops": [
+                        [
+                            6.5,
+                            0.5
+                        ],
+                        [
+                            18,
+                            0.5
+                        ]
+                    ]
+                },
+                "line-color": "hsl(46, 100%, 35%)",
+                "line-width": {
+                    "base": 1,
+                    "stops": [
+                        [
+                            0,
+                            0.2
+                        ],
+                        [
+                            7,
+                            0.4
+                        ],
+                        [
+                            10,
+                            0.8
+                        ],
+                        [
+                            11,
+                            3.2
+                        ],
+                        [
+                            12,
+                            4
+                        ],
+                        [
+                            13,
+                            4.5
+                        ],
+                        [
+                            14,
+                            5
+                        ],
+                        [
+                            15,
+                            6
+                        ],
+                        [
+                            16,
+                            8
+                        ],
+                        [
+                            17,
+                            13
+                        ],
+                        [
+                            18,
+                            17
+                        ],
+                        [
+                            19,
+                            27
+                        ],
+                        [
+                            20,
+                            37
+                        ]
+                    ]
+                }
+            }
+        },
+        {
+            "id": "line-vntunnel-quoclo-index",
+            "type": "line",
+            "source": "vietbando",
+            "source-layer": "line_vntunnel_index",
+            "filter": [
+                "in",
+                "level",
+                0,
+                -1
+            ],
+            "minzoom": 5,
+            "layout": {
+                "visibility": "visible",
+                "line-cap": "square",
+                "line-join": "round"
+            },
+            "paint": {
+                "line-opacity": {
+                    "base": 1,
+                    "stops": [
+                        [
+                            5,
+                            0.5
+                        ],
+                        [
+                            18,
+                            0.5
+                        ]
+                    ]
+                },
+                "line-color": "hsl(26, 88%, 35%)",
+                "line-width": {
+                    "base": 1,
+                    "stops": [
+                        [
+                            0,
+                            0.4
+                        ],
+                        [
+                            7,
+                            0.6
+                        ],
+                        [
+                            8,
+                            0.8
+                        ],
+                        [
+                            9,
+                            3.2
+                        ],
+                        [
+                            10,
+                            3.6
+                        ],
+                        [
+                            11,
+                            3
+                        ],
+                        [
+                            12,
+                            4
+                        ],
+                        [
+                            13,
+                            5
+                        ],
+                        [
+                            14,
+                            7
+                        ],
+                        [
+                            15,
+                            8
+                        ],
+                        [
+                            16,
+                            10
+                        ],
+                        [
+                            17,
+                            12
+                        ],
+                        [
+                            18,
+                            18
+                        ],
+                        [
+                            19,
+                            28
+                        ],
+                        [
+                            20,
+                            38
+                        ]
+                    ]
+                }
+            }
+        },
+        {
+            "id": "fill-vntunnel-hemlo-index",
+            "type": "line",
+            "source": "vietbando",
+            "source-layer": "line_vntunnel_index",
+            "minzoom": 14,
+            "filter": [
+                "==",
+                "level",
+                3
+            ],
+            "layout": {
+                "visibility": "visible",
+                "line-join": "round"
+            },
+            "paint": {
+                "line-dasharray": [
+                    3,
+                    3
+                ],
+                "line-width": 1,
+                "line-color": "hsl(0, 0%, 100%)",
+                "line-opacity": {
+                    "base": 1,
+                    "stops": [
+                        [
+                            14,
+                            0.5
+                        ],
+                        [
+                            18,
+                            0.5
+                        ]
+                    ]
+                },
+                "line-gap-width": {
+                    "base": 1,
+                    "stops": [
+                        [
+                            14,
+                            3
+                        ],
+                        [
+                            15,
+                            5
+                        ],
+                        [
+                            16,
+                            6
+                        ],
+                        [
+                            17,
+                            7
+                        ],
+                        [
+                            18,
+                            9
+                        ],
+                        [
+                            19,
+                            11
+                        ],
+                        [
+                            20,
+                            16
+                        ]
+                    ]
+                }
+            }
+        },
+        {
+            "id": "fill-vntunnel-huyenlo-index",
+            "type": "line",
+            "source": "vietbando",
+            "source-layer": "line_vntunnel_index",
+            "filter": [
+                "==",
+                "level",
+                2
+            ],
+            "minzoom": 13,
+            "layout": {
+                "visibility": "visible",
+                "line-join": "round"
+            },
+            "paint": {
+                "line-dasharray": [
+                    3,
+                    3
+                ],
+                "line-width": 1,
+                "line-color": "hsl(0, 0%, 100%)",
+                "line-opacity": {
+                    "base": 1,
+                    "stops": [
+                        [
+                            13,
+                            0.5
+                        ],
+                        [
+                            18,
+                            0.5
+                        ]
+                    ]
+                },
+                "line-gap-width": {
+                    "base": 0.1,
+                    "stops": [
+                        [
+                            13,
+                            3
+                        ],
+                        [
+                            14,
+                            4
+                        ],
+                        [
+                            15,
+                            6
+                        ],
+                        [
+                            16,
+                            8
+                        ],
+                        [
+                            17,
+                            10
+                        ],
+                        [
+                            18,
+                            12
+                        ],
+                        [
+                            19,
+                            17
+                        ],
+                        [
+                            20,
+                            22
+                        ]
+                    ]
+                }
+            }
+        },
+        {
+            "id": "fill-vntunnel-tinhlo-index",
+            "type": "line",
+            "source": "vietbando",
+            "source-layer": "line_vntunnel_index",
+            "filter": [
+                "==",
+                "level",
+                1
+            ],
+            "minzoom": 12,
+            "layout": {
+                "visibility": "visible",
+                "line-join": "round"
+            },
+            "paint": {
+                "line-dasharray": [
+                    3,
+                    3
+                ],
+                "line-width": 1,
+                "line-color": "hsl(46, 100%, 45%)",
+                "line-opacity": {
+                    "base": 1,
+                    "stops": [
+                        [
+                            12,
+                            0.5
+                        ],
+                        [
+                            18,
+                            0.5
+                        ]
+                    ]
+                },
+                "line-gap-width": {
+                    "base": 1,
+                    "stops": [
+                        [
+                            12,
+                            4.4
+                        ],
+                        [
+                            13,
+                            5
+                        ],
+                        [
+                            14,
+                            6
+                        ],
+                        [
+                            15,
+                            7
+                        ],
+                        [
+                            16,
+                            10
+                        ],
+                        [
+                            17,
+                            15
+                        ],
+                        [
+                            18,
+                            19
+                        ],
+                        [
+                            19,
+                            29
+                        ],
+                        [
+                            20,
+                            39
+                        ]
+                    ]
+                }
+            }
+        },
+        {
+            "id": "fill-vntunnel-quoclo-index",
+            "type": "line",
+            "source": "vietbando",
+            "source-layer": "line_vntunnel_index",
+            "filter": [
+                "in",
+                "level",
+                0,
+                -1
+            ],
+            "minzoom": 11,
+            "layout": {
+                "visibility": "visible",
+                "line-join": "round"
+            },
+            "paint": {
+                "line-dasharray": [
+                    3,
+                    3
+                ],
+                "line-width": 1,
+                "line-color": "hsl(26, 88%, 60%)",
+                "line-opacity": {
+                    "base": 1,
+                    "stops": [
+                        [
+                            11,
+                            0.5
+                        ],
+                        [
+                            18,
+                            0.5
+                        ]
+                    ]
+                },
+                "line-gap-width": {
+                    "base": 1,
+                    "stops": [
+                        [
+                            11,
+                            4
+                        ],
+                        [
+                            12,
+                            5
+                        ],
+                        [
+                            13,
+                            6
+                        ],
+                        [
+                            14,
+                            8
+                        ],
+                        [
+                            15,
+                            10
+                        ],
+                        [
+                            16,
+                            12
+                        ],
+                        [
+                            17,
+                            16
+                        ],
+                        [
+                            18,
+                            22
+                        ],
+                        [
+                            19,
+                            32
+                        ],
+                        [
+                            20,
+                            42
+                        ]
+                    ]
+                }
+            }
+        },
+        {
+            "id": "line-vnferry-hemlo-index",
+            "type": "line",
+            "source": "vietbando",
+            "source-layer": "line_vnferry_index",
+            "filter": [
+                "==",
+                "level",
+                3
+            ],
+            "minzoom": 13,
+            "layout": {
+                "visibility": "visible"
+            },
+            "paint": {
+                "line-color": "hsl(0, 0%, 75%)",
+                "line-dasharray": [
+                    2,
+                    2
+                ],
+                "line-gap-width": {
+                    "base": 1,
+                    "stops": [
+                        [
+                            0,
+                            0
+                        ],
+                        [
+                            10,
+                            0.2
+                        ],
+                        [
+                            11,
+                            0.4
+                        ],
+                        [
+                            12,
+                            0.6
+                        ],
+                        [
+                            13,
+                            0.8
+                        ],
+                        [
+                            14,
+                            3
+                        ],
+                        [
+                            15,
+                            5
+                        ],
+                        [
+                            16,
+                            6
+                        ],
+                        [
+                            17,
+                            7
+                        ],
+                        [
+                            18,
+                            9
+                        ],
+                        [
+                            19,
+                            12
+                        ]
+                    ]
+                }
+            }
+        },
+        {
+            "id": "line-vnferry-huyenlo-index",
+            "type": "line",
+            "source": "vietbando",
+            "source-layer": "line_vnferry_index",
+            "filter": [
+                "==",
+                "level",
+                2
+            ],
+            "minzoom": 9.5,
+            "layout": {
+                "visibility": "visible"
+            },
+            "paint": {
+                "line-color": "hsl(0, 0%, 75%)",
+                "line-width": 1,
+                "line-dasharray": [
+                    2,
+                    2
+                ],
+                "line-gap-width": {
+                    "base": 1,
+                    "stops": [
+                        [
+                            0,
+                            0
+                        ],
+                        [
+                            11,
+                            0.6
+                        ],
+                        [
+                            12,
+                            3
+                        ],
+                        [
+                            13,
+                            4
+                        ],
+                        [
+                            14,
+                            6
+                        ],
+                        [
+                            15,
+                            8
+                        ],
+                        [
+                            16,
+                            10
+                        ],
+                        [
+                            17,
+                            12
+                        ],
+                        [
+                            18,
+                            14
+                        ]
+                    ]
+                }
+            }
+        },
+        {
+            "id": "line-vnferry-tinhlo-index",
+            "type": "line",
+            "source": "vietbando",
+            "source-layer": "line_vnferry_index",
+            "filter": [
+                "==",
+                "level",
+                1
+            ],
+            "minzoom": 6.5,
+            "layout": {
+                "visibility": "visible"
+            },
+            "paint": {
+                "line-color": "hsl(46, 100%, 35%)",
+                "line-dasharray": [
+                    3,
+                    3
+                ],
+                "line-gap-width": {
+                    "base": 1,
+                    "stops": [
+                        [
+                            0,
+                            0.2
+                        ],
+                        [
+                            7,
+                            0.4
+                        ],
+                        [
+                            10,
+                            0.8
+                        ],
+                        [
+                            11,
+                            1.2
+                        ],
+                        [
+                            12,
+                            2.4
+                        ],
+                        [
+                            13,
+                            3
+                        ],
+                        [
+                            14,
+                            4
+                        ],
+                        [
+                            15,
+                            5
+                        ],
+                        [
+                            16,
+                            8
+                        ],
+                        [
+                            17,
+                            13
+                        ],
+                        [
+                            18,
+                            17
+                        ]
+                    ]
+                }
+            }
+        },
+        {
+            "id": "line-vnferry-quoclo-index",
+            "type": "line",
+            "source": "vietbando",
+            "source-layer": "line_vnferry_index",
+            "filter": [
+                "in",
+                "level",
+                0,
+                -1
+            ],
+            "layout": {
+                "visibility": "visible"
+            },
+            "paint": {
+                "line-color": "hsl(26, 88%, 35%)",
+                "line-dasharray": [
+                    3,
+                    3
+                ],
+                "line-gap-width": {
+                    "base": 1,
+                    "stops": [
+                        [
+                            0,
+                            0.4
+                        ],
+                        [
+                            7,
+                            0.6
+                        ],
+                        [
+                            8,
+                            0.8
+                        ],
+                        [
+                            9,
+                            1.2
+                        ],
+                        [
+                            10,
+                            1.6
+                        ],
+                        [
+                            11,
+                            2
+                        ],
+                        [
+                            12,
+                            3
+                        ],
+                        [
+                            13,
+                            4
+                        ],
+                        [
+                            14,
+                            6
+                        ],
+                        [
+                            15,
+                            8
+                        ],
+                        [
+                            16,
+                            10
+                        ],
+                        [
+                            17,
+                            14
+                        ],
+                        [
+                            18,
+                            20
+                        ]
+                    ]
+                }
+            }
+        },
+        {
+            "id": "line-vnroad-hemlo-index",
+            "source": "vietbando",
+            "source-layer": "line_vnroad_index",
+            "filter": [
+                "==",
+                "level",
+                3
+            ],
+            "type": "line",
+            "minzoom": 12,
+            "layout": {
+                "visibility": "visible",
+                "line-join": "round",
+                "line-cap": "round"
+            },
+            "paint": {
+                "line-color": {
+                    "base": 1,
+                    "stops": [
+                        [
+                            0,
+                            "hsl(0, 0%, 100%)"
+                        ],
+                        [
+                            14,
+                            "hsl(0, 0%, 100%)"
+                        ],
+                        [
+                            15,
+                            "hsl(0, 0%, 75%)"
+                        ]
+                    ]
+                },
+                "line-opacity": {
+                    "base": 1,
+                    "stops": [
+                        [
+                            5,
+                            1
+                        ],
+                        [
+                            18,
+                            1
+                        ]
+                    ]
+                },
+                "line-width": {
+                    "base": 1,
+                    "stops": [
+                        [
+                            12,
+                            0.5
+                        ],
+                        [
+                            13,
+                            1
+                        ],
+                        [
+                            14,
+                            2
+                        ],
+                        [
+                            15,
+                            4
+                        ],
+                        [
+                            16,
+                            6
+                        ],
+                        [
+                            17,
+                            8
+                        ],
+                        [
+                            18,
+                            10
+                        ],
+                        [
+                            19,
+                            12
+                        ],
+                        [
+                            20,
+                            14
+                        ]
+                    ]
+                }
+            }
+        },
+        {
+            "id": "line-vnroad-huyenlo-index",
+            "source": "vietbando",
+            "source-layer": "line_vnroad_index",
+            "type": "line",
+            "filter": [
+                "==",
+                "level",
+                2
+            ],
+            "minzoom": 11,
+            "layout": {
+                "visibility": "visible",
+                "line-join": "round",
+                "line-cap": "round"
+            },
+            "paint": {
+                "line-color": {
+                    "base": 1,
+                    "stops": [
+                        [
+                            0,
+                            "hsl(0, 0%, 100%)"
+                        ],
+                        [
+                            13,
+                            "hsl(0, 0%, 100%)"
+                        ],
+                        [
+                            14,
+                            "hsl(0, 0%, 75%)"
+                        ]
+                    ]
+                },
+                "line-opacity": {
+                    "base": 1,
+                    "stops": [
+                        [
+                            5,
+                            1
+                        ],
+                        [
+                            18,
+                            1
+                        ]
+                    ]
+                },
+                "line-width": {
+                    "base": 0.1,
+                    "stops": [
+                        [
+                            11,
+                            0.5
+                        ],
+                        [
+                            12,
+                            1
+                        ],
+                        [
+                            13,
+                            2
+                        ],
+                        [
+                            14,
+                            4
+                        ],
+                        [
+                            15,
+                            6
+                        ],
+                        [
+                            16,
+                            8
+                        ],
+                        [
+                            17,
+                            10
+                        ],
+                        [
+                            18,
+                            12
+                        ],
+                        [
+                            19,
+                            14
+                        ],
+                        [
+                            20,
+                            16
+                        ]
+                    ]
+                }
+            }
+        },
+        {
+            "id": "line-vnroad-tinhlo-index",
+            "type": "line",
+            "source": "vietbando",
+            "source-layer": "line_vnroad_index",
+            "filter": [
+                "==",
+                "level",
+                1
+            ],
+            "minzoom": 6.5,
+            "layout": {
+                "visibility": "visible",
+                "line-join": "round",
+                "line-cap": "round"
+            },
+            "paint": {
+                "line-color": {
+                    "base": 1,
+                    "stops": [
+                        [
+                            0,
+                            "hsl(46, 100%, 45%)"
+                        ],
+                        [
+                            12,
+                            "hsl(46, 100%, 45%)"
+                        ],
+                        [
+                            13,
+                            "hsl(46, 100%, 35%)"
+                        ]
+                    ]
+                },
+                "line-opacity": {
+                    "base": 1,
+                    "stops": [
+                        [
+                            5,
+                            1
+                        ],
+                        [
+                            18,
+                            1
+                        ]
+                    ]
+                },
+                "line-width": {
+                    "base": 1,
+                    "stops": [
+                        [
+                            0,
+                            0.2
+                        ],
+                        [
+                            7,
+                            0.4
+                        ],
+                        [
+                            10,
+                            0.8
+                        ],
+                        [
+                            11,
+                            3.2
+                        ],
+                        [
+                            12,
+                            4.4
+                        ],
+                        [
+                            13,
+                            5
+                        ],
+                        [
+                            14,
+                            6
+                        ],
+                        [
+                            15,
+                            7
+                        ],
+                        [
+                            16,
+                            10
+                        ],
+                        [
+                            17,
+                            15
+                        ],
+                        [
+                            18,
+                            19
+                        ],
+                        [
+                            19,
+                            29
+                        ],
+                        [
+                            20,
+                            39
+                        ]
+                    ]
+                }
+            }
+        },
+        {
+            "id": "line-vnroad-quoclo-index",
+            "type": "line",
+            "source": "vietbando",
+            "source-layer": "line_vnroad_index",
+            "filter": [
+                "in",
+                "level",
+                0,
+                -1
+            ],
+            "minzoom": 5,
+            "layout": {
+                "visibility": "visible",
+                "line-join": "round",
+                "line-cap": "round"
+            },
+            "paint": {
+                "line-color": {
+                    "base": 1,
+                    "stops": [
+                        [
+                            0,
+                            "hsl(26, 88%, 60%)"
+                        ],
+                        [
+                            11,
+                            "hsl(26, 88%, 60%)"
+                        ],
+                        [
+                            12,
+                            "hsl(26, 88%, 35%)"
+                        ]
+                    ]
+                },
+                "line-opacity": {
+                    "base": 1,
+                    "stops": [
+                        [
+                            5,
+                            1
+                        ],
+                        [
+                            18,
+                            1
+                        ]
+                    ]
+                },
+                "line-width": {
+                    "base": 1,
+                    "stops": [
+                        [
+                            0,
+                            0.4
+                        ],
+                        [
+                            7,
+                            0.6
+                        ],
+                        [
+                            8,
+                            0.8
+                        ],
+                        [
+                            9,
+                            3.2
+                        ],
+                        [
+                            10,
+                            3.6
+                        ],
+                        [
+                            11,
+                            4
+                        ],
+                        [
+                            12,
+                            5
+                        ],
+                        [
+                            13,
+                            6
+                        ],
+                        [
+                            14,
+                            8
+                        ],
+                        [
+                            15,
+                            10
+                        ],
+                        [
+                            16,
+                            12
+                        ],
+                        [
+                            17,
+                            16
+                        ],
+                        [
+                            18,
+                            22
+                        ],
+                        [
+                            19,
+                            32
+                        ],
+                        [
+                            20,
+                            42
+                        ]
+                    ]
+                }
+            }
+        },
+        {
+            "id": "fill-vnroad-hemlo-index",
+            "source": "vietbando",
+            "source-layer": "line_vnroad_index",
+            "type": "line",
+            "minzoom": 12,
+            "filter": [
+                "==",
+                "level",
+                3
+            ],
+            "layout": {
+                "visibility": "visible",
+                "line-cap": "round",
+                "line-join": "round"
+            },
+            "paint": {
+                "line-color": "hsl(0, 0%, 100%)",
+                "line-opacity": {
+                    "base": 1,
+                    "stops": [
+                        [
+                            5,
+                            1
+                        ],
+                        [
+                            18,
+                            1
+                        ]
+                    ]
+                },
+                "line-width": {
+                    "base": 1,
+                    "stops": [
+                        [
+                            12,
+                            0.2
+                        ],
+                        [
+                            13,
+                            0.5
+                        ],
+                        [
+                            14,
+                            1
+                        ],
+                        [
+                            15,
+                            3
+                        ],
+                        [
+                            16,
+                            5
+                        ],
+                        [
+                            17,
+                            7
+                        ],
+                        [
+                            18,
+                            9
+                        ],
+                        [
+                            19,
+                            11
+                        ],
+                        [
+                            20,
+                            13
+                        ]
+                    ]
+                }
+            }
+        },
+        {
+            "id": "fill-vnroad-huyenlo-index",
+            "source": "vietbando",
+            "source-layer": "line_vnroad_index",
+            "type": "line",
+            "minzoom": 11,
+            "filter": [
+                "==",
+                "level",
+                2
+            ],
+            "layout": {
+                "visibility": "visible",
+                "line-cap": "round",
+                "line-join": "round"
+            },
+            "paint": {
+                "line-color": "hsl(0, 0%, 100%)",
+                "line-opacity": {
+                    "base": 1,
+                    "stops": [
+                        [
+                            5,
+                            1
+                        ],
+                        [
+                            18,
+                            1
+                        ]
+                    ]
+                },
+                "line-width": {
+                    "base": 1,
+                    "stops": [
+                        [
+                            11,
+                            0.2
+                        ],
+                        [
+                            12,
+                            0.5
+                        ],
+                        [
+                            13,
+                            1
+                        ],
+                        [
+                            14,
+                            3
+                        ],
+                        [
+                            15,
+                            5
+                        ],
+                        [
+                            16,
+                            7
+                        ],
+                        [
+                            17,
+                            9
+                        ],
+                        [
+                            18,
+                            11
+                        ],
+                        [
+                            19,
+                            13
+                        ],
+                        [
+                            20,
+                            15
+                        ]
+                    ]
+                }
+            }
+        },
+        {
+            "id": "fill-vnroad-tinhlo-index",
+            "source": "vietbando",
+            "source-layer": "line_vnroad_index",
+            "type": "line",
+            "minzoom": 12,
+            "filter": [
+                "in",
+                "level",
+                1
+            ],
+            "layout": {
+                "visibility": "visible",
+                "line-cap": "round",
+                "line-join": "round"
+            },
+            "paint": {
+                "line-color": "hsl(46, 100%, 45%)",
+                "line-opacity": {
+                    "base": 1,
+                    "stops": [
+                        [
+                            5,
+                            1
+                        ],
+                        [
+                            18,
+                            1
+                        ]
+                    ]
+                },
+                "line-width": {
+                    "base": 1,
+                    "stops": [
+                        [
+                            12,
+                            4
+                        ],
+                        [
+                            13,
+                            4.5
+                        ],
+                        [
+                            14,
+                            5
+                        ],
+                        [
+                            15,
+                            6
+                        ],
+                        [
+                            16,
+                            8
+                        ],
+                        [
+                            17,
+                            13
+                        ],
+                        [
+                            18,
+                            17
+                        ],
+                        [
+                            19,
+                            27
+                        ],
+                        [
+                            20,
+                            37
+                        ]
+                    ]
+                }
+            }
+        },
+        {
+            "id": "fill-vnroad-quoclo-index",
+            "source": "vietbando",
+            "source-layer": "line_vnroad_index",
+            "type": "line",
+            "minzoom": 11,
+            "filter": [
+                "in",
+                "level",
+                0,
+                -1
+            ],
+            "layout": {
+                "visibility": "visible",
+                "line-cap": "round",
+                "line-join": "round"
+            },
+            "paint": {
+                "line-color": "hsl(26, 88%, 60%)",
+                "line-opacity": {
+                    "base": 1,
+                    "stops": [
+                        [
+                            5,
+                            1
+                        ],
+                        [
+                            18,
+                            1
+                        ]
+                    ]
+                },
+                "line-width": {
+                    "base": 1,
+                    "stops": [
+                        [
+                            11,
+                            3
+                        ],
+                        [
+                            12,
+                            4
+                        ],
+                        [
+                            13,
+                            5
+                        ],
+                        [
+                            14,
+                            7
+                        ],
+                        [
+                            15,
+                            8
+                        ],
+                        [
+                            16,
+                            10
+                        ],
+                        [
+                            17,
+                            12
+                        ],
+                        [
+                            18,
+                            18
+                        ],
+                        [
+                            19,
+                            28
+                        ],
+                        [
+                            20,
+                            38
+                        ]
+                    ]
+                }
+            }
+        },
+        {
+            "id": "line-vnbridge-hemlo-index",
+            "source": "vietbando",
+            "source-layer": "line_vnbridge_index",
+            "filter": [
+                "==",
+                "level",
+                3
+            ],
+            "type": "line",
+            "minzoom": 13,
+            "layout": {
+                "visibility": "visible"
+            },
+            "paint": {
+                "line-color": {
+                    "base": 1,
+                    "stops": [
+                        [
+                            0,
+                            "hsl(0, 0%, 100%)"
+                        ],
+                        [
+                            14,
+                            "hsl(0, 0%, 100%)"
+                        ],
+                        [
+                            15,
+                            "hsl(0, 0%, 75%)"
+                        ]
+                    ]
+                },
+                "line-opacity": {
+                    "base": 1,
+                    "stops": [
+                        [
+                            5,
+                            1
+                        ],
+                        [
+                            18,
+                            1
+                        ]
+                    ]
+                },
+                "line-width": {
+                    "base": 1,
+                    "stops": [
+                        [
+                            0,
+                            0
+                        ],
+                        [
+                            13,
+                            0.4
+                        ],
+                        [
+                            14,
+                            3
+                        ],
+                        [
+                            15,
+                            7
+                        ],
+                        [
+                            16,
+                            8
+                        ],
+                        [
+                            17,
+                            9
+                        ],
+                        [
+                            18,
+                            11
+                        ],
+                        [
+                            19,
+                            13
+                        ],
+                        [
+                            20,
+                            18
+                        ]
+                    ]
+                }
+            }
+        },
+        {
+            "id": "line-vnbridge-huyenlo-index",
+            "type": "line",
+            "source": "vietbando",
+            "source-layer": "line_vnbridge_index",
+            "filter": [
+                "==",
+                "level",
+                2
+            ],
+            "minzoom": 9,
+            "layout": {
+                "visibility": "visible"
+            },
+            "paint": {
+                "line-color": {
+                    "base": 1,
+                    "stops": [
+                        [
+                            0,
+                            "hsl(0, 0%, 100%)"
+                        ],
+                        [
+                            13,
+                            "hsl(0, 0%, 100%)"
+                        ],
+                        [
+                            14,
+                            "hsl(0, 0%, 75%)"
+                        ]
+                    ]
+                },
+                "line-opacity": {
+                    "base": 1,
+                    "stops": [
+                        [
+                            5,
+                            1
+                        ],
+                        [
+                            18,
+                            1
+                        ]
+                    ]
+                },
+                "line-width": {
+                    "base": 1,
+                    "stops": [
+                        [
+                            0,
+                            0.1
+                        ],
+                        [
+                            11,
+                            0.5
+                        ],
+                        [
+                            12,
+                            1.5
+                        ],
+                        [
+                            13,
+                            3
+                        ],
+                        [
+                            14,
+                            4
+                        ],
+                        [
+                            15,
+                            8
+                        ],
+                        [
+                            16,
+                            10
+                        ],
+                        [
+                            17,
+                            12
+                        ],
+                        [
+                            18,
+                            14
+                        ],
+                        [
+                            19,
+                            19
+                        ],
+                        [
+                            20,
+                            24
+                        ]
+                    ]
+                }
+            }
+        },
+        {
+            "id": "line-vnbridge-tinhlo-index",
+            "type": "line",
+            "source": "vietbando",
+            "source-layer": "line_vnbridge_index",
+            "minzoom": 6.5,
+            "filter": [
+                "==",
+                "level",
+                1
+            ],
+            "layout": {
+                "visibility": "visible"
+            },
+            "paint": {
+                "line-color": {
+                    "base": 1,
+                    "stops": [
+                        [
+                            0,
+                            "hsl(46, 100%, 45%)"
+                        ],
+                        [
+                            12,
+                            "hsl(46, 100%, 45%)"
+                        ],
+                        [
+                            13,
+                            "hsl(46, 100%, 35%)"
+                        ]
+                    ]
+                },
+                "line-opacity": {
+                    "base": 1,
+                    "stops": [
+                        [
+                            5,
+                            1
+                        ],
+                        [
+                            18,
+                            1
+                        ]
+                    ]
+                },
+                "line-width": {
+                    "base": 1,
+                    "stops": [
+                        [
+                            0,
+                            0.2
+                        ],
+                        [
+                            7,
+                            0.4
+                        ],
+                        [
+                            10,
+                            0.8
+                        ],
+                        [
+                            11,
+                            3.2
+                        ],
+                        [
+                            12,
+                            4.4
+                        ],
+                        [
+                            13,
+                            5
+                        ],
+                        [
+                            14,
+                            6
+                        ],
+                        [
+                            15,
+                            10
+                        ],
+                        [
+                            16,
+                            13
+                        ],
+                        [
+                            17,
+                            18
+                        ],
+                        [
+                            18,
+                            22
+                        ],
+                        [
+                            19,
+                            32
+                        ],
+                        [
+                            20,
+                            42
+                        ]
+                    ]
+                }
+            }
+        },
+        {
+            "id": "line-vnbridge-quoclo-index",
+            "type": "line",
+            "source": "vietbando",
+            "source-layer": "line_vnbridge_index",
+            "minzoom": 5,
+            "filter": [
+                "in",
+                "level",
+                0,
+                -1
+            ],
+            "layout": {
+                "visibility": "visible"
+            },
+            "paint": {
+                "line-color": {
+                    "base": 1,
+                    "stops": [
+                        [
+                            0,
+                            "hsl(26, 88%, 60%)"
+                        ],
+                        [
+                            11,
+                            "hsl(26, 88%, 60%)"
+                        ],
+                        [
+                            12,
+                            "hsl(26, 88%, 35%)"
+                        ]
+                    ]
+                },
+                "line-opacity": {
+                    "base": 1,
+                    "stops": [
+                        [
+                            5,
+                            1
+                        ],
+                        [
+                            18,
+                            1
+                        ]
+                    ]
+                },
+                "line-width": {
+                    "base": 1,
+                    "stops": [
+                        [
+                            0,
+                            0.4
+                        ],
+                        [
+                            7,
+                            0.6
+                        ],
+                        [
+                            8,
+                            0.8
+                        ],
+                        [
+                            9,
+                            3.2
+                        ],
+                        [
+                            10,
+                            3.6
+                        ],
+                        [
+                            11,
+                            4
+                        ],
+                        [
+                            12,
+                            5
+                        ],
+                        [
+                            13,
+                            6
+                        ],
+                        [
+                            14,
+                            8
+                        ],
+                        [
+                            15,
+                            14
+                        ],
+                        [
+                            16,
+                            16
+                        ],
+                        [
+                            17,
+                            20
+                        ],
+                        [
+                            18,
+                            26
+                        ],
+                        [
+                            19,
+                            36
+                        ],
+                        [
+                            20,
+                            46
+                        ]
+                    ]
+                }
+            }
+        },
+        {
+            "id": "fill-vnbridge-hemlo-index",
+            "source": "vietbando",
+            "source-layer": "line_vnbridge_index",
+            "type": "line",
+            "minzoom": 14,
+            "filter": [
+                "==",
+                "level",
+                3
+            ],
+            "layout": {
+                "visibility": "visible"
+            },
+            "paint": {
+                "line-color": "hsl(0, 0%, 100%)",
+                "line-opacity": {
+                    "base": 1,
+                    "stops": [
+                        [
+                            5,
+                            1
+                        ],
+                        [
+                            18,
+                            1
+                        ]
+                    ]
+                },
+                "line-width": {
+                    "base": 1,
+                    "stops": [
+                        [
+                            14,
+                            2
+                        ],
+                        [
+                            15,
+                            4
+                        ],
+                        [
+                            16,
+                            5
+                        ],
+                        [
+                            17,
+                            5
+                        ],
+                        [
+                            18,
+                            7
+                        ],
+                        [
+                            19,
+                            9
+                        ],
+                        [
+                            20,
+                            14
+                        ]
+                    ]
+                }
+            }
+        },
+        {
+            "id": "fill-vnbridge-huyenlo-index",
+            "source": "vietbando",
+            "source-layer": "line_vnbridge_index",
+            "type": "line",
+            "minzoom": 13,
+            "filter": [
+                "==",
+                "level",
+                2
+            ],
+            "layout": {
+                "visibility": "visible"
+            },
+            "paint": {
+                "line-color": "hsl(0, 0%, 100%)",
+                "line-opacity": {
+                    "base": 1,
+                    "stops": [
+                        [
+                            5,
+                            1
+                        ],
+                        [
+                            18,
+                            1
+                        ]
+                    ]
+                },
+                "line-width": {
+                    "base": 1,
+                    "stops": [
+                        [
+                            13,
+                            2
+                        ],
+                        [
+                            14,
+                            3
+                        ],
+                        [
+                            15,
+                            5
+                        ],
+                        [
+                            16,
+                            6
+                        ],
+                        [
+                            17,
+                            8
+                        ],
+                        [
+                            18,
+                            10
+                        ],
+                        [
+                            19,
+                            15
+                        ],
+                        [
+                            20,
+                            20
+                        ]
+                    ]
+                }
+            }
+        },
+        {
+            "id": "fill-vnbridge-tinhlo-index",
+            "source": "vietbando",
+            "source-layer": "line_vnbridge_index",
+            "type": "line",
+            "minzoom": 12,
+            "filter": [
+                "==",
+                "level",
+                1
+            ],
+            "layout": {
+                "visibility": "visible",
+                "line-join": "round"
+            },
+            "paint": {
+                "line-color": "hsl(46, 100%, 45%)",
+                "line-opacity": {
+                    "base": 1,
+                    "stops": [
+                        [
+                            5,
+                            1
+                        ],
+                        [
+                            18,
+                            1
+                        ]
+                    ]
+                },
+                "line-width": {
+                    "base": 1,
+                    "stops": [
+                        [
+                            12,
+                            4
+                        ],
+                        [
+                            13,
+                            4.5
+                        ],
+                        [
+                            14,
+                            5
+                        ],
+                        [
+                            15,
+                            6
+                        ],
+                        [
+                            16,
+                            8
+                        ],
+                        [
+                            17,
+                            13
+                        ],
+                        [
+                            18,
+                            17
+                        ],
+                        [
+                            19,
+                            27
+                        ],
+                        [
+                            20,
+                            37
+                        ]
+                    ]
+                }
+            }
+        },
+        {
+            "id": "fill-vnbridge-quoclo-index",
+            "source": "vietbando",
+            "source-layer": "line_vnbridge_index",
+            "type": "line",
+            "minzoom": 11,
+            "filter": [
+                "in",
+                "level",
+                0,
+                -1
+            ],
+            "layout": {
+                "visibility": "visible",
+                "line-join": "round"
+            },
+            "paint": {
+                "line-color": "hsl(26, 88%, 60%)",
+                "line-opacity": {
+                    "base": 1,
+                    "stops": [
+                        [
+                            5,
+                            1
+                        ],
+                        [
+                            18,
+                            1
+                        ]
+                    ]
+                },
+                "line-width": {
+                    "base": 1,
+                    "stops": [
+                        [
+                            11,
+                            3
+                        ],
+                        [
+                            12,
+                            4
+                        ],
+                        [
+                            13,
+                            5
+                        ],
+                        [
+                            14,
+                            7
+                        ],
+                        [
+                            15,
+                            8
+                        ],
+                        [
+                            16,
+                            10
+                        ],
+                        [
+                            17,
+                            12
+                        ],
+                        [
+                            18,
+                            18
+                        ],
+                        [
+                            19,
+                            28
+                        ],
+                        [
+                            20,
+                            38
+                        ]
+                    ]
+                }
+            }
+        },
+        {
+            "id": "line_vncountry_index_halo",
+            "source": "vietbando",
+            "source-layer": "line_vnborder_index",
+            "minzoom": 1,
+            "filter": [
+                "all",
+                [
+                    "==",
+                    "type",
+                    0
+                ],
+                [
+                    "==",
+                    "vietnam",
+                    1
+                ]
+            ],
+            "type": "line",
+            "layout": {
+                "line-cap": "round",
+                "line-join": "round"
+            },
+            "paint": {
+                "line-color": "hsl(0, 0%, 100%)",
+                "line-opacity": 0.8,
+                "line-blur": [
+                    "interpolate",
+                    [
+                        "linear"
+                    ],
+                    [
+                        "zoom"
+                    ],
+                    0,
+                    0.1,
+                    5,
+                    8,
+                    12,
+                    24
+                ],
+                "line-width": [
+                    "interpolate",
+                    [
+                        "linear"
+                    ],
+                    [
+                        "zoom"
+                    ],
+                    0,
+                    0.1,
+                    5,
+                    8,
+                    12,
+                    24
+                ]
+            }
+        },
+        {
+            "id": "line_vncountry_index",
+            "source": "vietbando",
+            "source-layer": "line_vnborder_index",
+            "minzoom": 5,
+            "maxzoom": 20,
+            "filter": [
+                "all",
+                [
+                    "==",
+                    "type",
+                    0
+                ],
+                [
+                    "==",
+                    "vietnam",
+                    1
+                ]
+            ],
+            "type": "line",
+            "paint": {
+                "line-color": "hsl(0, 50%, 40%)",
+                "line-opacity": 1,
+                "line-dasharray": [
+                    0.1,
+                    2.3,
+                    0.1,
+                    1.5
+                ],
+                "line-width": [
+                    "interpolate",
+                    [
+                        "linear"
+                    ],
+                    [
+                        "zoom"
+                    ],
+                    0,
+                    0.1,
+                    5,
+                    0.8,
+                    12,
+                    8
+                ]
+            }
+        },
+        {
+            "id": "line_vncountry_index_ref",
+            "source": "vietbando",
+            "source-layer": "line_vnborder_index",
+            "minzoom": 1,
+            "filter": [
+                "all",
+                [
+                    "==",
+                    "type",
+                    0
+                ],
+                [
+                    "==",
+                    "vietnam",
+                    1
+                ]
+            ],
+            "type": "line",
+            "paint": {
+                "line-color": "hsl(0, 50%, 40%)",
+                "line-opacity": 1,
+                "line-dasharray": [
+                    5,
+                    1,
+                    1,
+                    1
+                ],
+                "line-width": [
+                    "interpolate",
+                    [
+                        "linear"
+                    ],
+                    [
+                        "zoom"
+                    ],
+                    0,
+                    0.1,
+                    5,
+                    0.4,
+                    12,
+                    4
+                ]
+            }
+        },
+        {
+            "id": "line_wcountry_index_halo",
+            "source": "vt_background",
+            "source-layer": "line_wcountry_index",
+            "minzoom": 1,
+            "filter": [
+                "==",
+                "vietnam",
+                0
+            ],
+            "type": "line",
+            "layout": {
+                "line-cap": "round",
+                "line-join": "round"
+            },
+            "paint": {
+                "line-color": "hsl(0, 0%, 100%)",
+                "line-opacity": 0.8,
+                "line-blur": [
+                    "interpolate",
+                    [
+                        "linear"
+                    ],
+                    [
+                        "zoom"
+                    ],
+                    0,
+                    0.1,
+                    5,
+                    8,
+                    12,
+                    24
+                ],
+                "line-width": [
+                    "interpolate",
+                    [
+                        "linear"
+                    ],
+                    [
+                        "zoom"
+                    ],
+                    0,
+                    0.1,
+                    5,
+                    8,
+                    12,
+                    24
+                ]
+            }
+        },
+        {
+            "id": "line_wcountry_index",
+            "source": "vt_background",
+            "source-layer": "line_wcountry_index",
+            "minzoom": 5,
+            "maxzoom": 20,
+            "filter": [
+                "==",
+                "vietnam",
+                0
+            ],
+            "type": "line",
+            "paint": {
+                "line-color": "hsl(0, 0%, 27%)",
+                "line-opacity": 1,
+                "line-dasharray": [
+                    0.1,
+                    2.3,
+                    0.1,
+                    1.5
+                ],
+                "line-width": [
+                    "interpolate",
+                    [
+                        "linear"
+                    ],
+                    [
+                        "zoom"
+                    ],
+                    0,
+                    0.1,
+                    5,
+                    0.8,
+                    12,
+                    8
+                ]
+            }
+        },
+        {
+            "id": "line_wcountry_index_ref",
+            "source": "vt_background",
+            "source-layer": "line_wcountry_index",
+            "minzoom": 1,
+            "filter": [
+                "==",
+                "vietnam",
+                0
+            ],
+            "type": "line",
+            "paint": {
+                "line-color": "hsl(0, 0%, 27%)",
+                "line-opacity": 1,
+                "line-dasharray": [
+                    5,
+                    1,
+                    1,
+                    1
+                ],
+                "line-width": [
+                    "interpolate",
+                    [
+                        "linear"
+                    ],
+                    [
+                        "zoom"
+                    ],
+                    0,
+                    0.1,
+                    5,
+                    0.4,
+                    12,
+                    4
+                ]
+            }
+        },
+        {
+            "id": "border_province_index",
+            "type": "line",
+            "source": "vietbando",
+            "source-layer": "line_vnborder_index",
+            "minzoom": 4,
+            "maxzoom": 20,
+            "filter": [
+                "all",
+                [
+                    "==",
+                    "type",
+                    1
+                ],
+                [
+                    "==",
+                    "conflict",
+                    0
+                ]
+            ],
+            "layout": {
+                "line-cap": "round",
+                "line-join": "round"
+            },
+            "paint": {
+                "line-color": "hsl(0, 0%, 30%)",
+                "line-opacity": 1,
+                "line-dasharray": [
+                    "literal",
+                    [
+                        4,
+                        4
+                    ]
+                ],
+                "line-width": [
+                    "interpolate",
+                    [
+                        "linear"
+                    ],
+                    [
+                        "zoom"
+                    ],
+                    0,
+                    0,
+                    18,
+                    2
+                ]
+            }
+        },
+        {
+            "id": "border_province_conflict_index",
+            "type": "line",
+            "source": "vietbando",
+            "source-layer": "line_vnborder_index",
+            "minzoom": 4,
+            "maxzoom": 20,
+            "filter": [
+                "all",
+                [
+                    "==",
+                    "type",
+                    1
+                ],
+                [
+                    "==",
+                    "conflict",
+                    1
+                ]
+            ],
+            "layout": {
+                "line-cap": "round",
+                "line-join": "round"
+            },
+            "paint": {
+                "line-color": "hsl(0, 50%, 40%)",
+                "line-opacity": 1,
+                "line-dasharray": [
+                    "literal",
+                    [
+                        4,
+                        4
+                    ]
+                ],
+                "line-width": [
+                    "interpolate",
+                    [
+                        "linear"
+                    ],
+                    [
+                        "zoom"
+                    ],
+                    0,
+                    0,
+                    18,
+                    2
+                ]
+            }
+        },
+        {
+            "id": "border_district_index",
+            "type": "line",
+            "source": "vietbando",
+            "source-layer": "line_vnborder_index",
+            "minzoom": 8,
+            "maxzoom": 20,
+            "filter": [
+                "==",
+                "type",
+                2
+            ],
+            "layout": {
+                "line-cap": "round",
+                "line-join": "round"
+            },
+            "paint": {
+                "line-color": "hsl(0, 0%, 30%)",
+                "line-opacity": 1,
+                "line-dasharray": [
+                    "literal",
+                    [
+                        3,
+                        1,
+                        3,
+                        0.6,
+                        0.6,
+                        0.6,
+                        0.6,
+                        0.6
+                    ]
+                ],
+                "line-width": [
+                    "interpolate",
+                    [
+                        "linear"
+                    ],
+                    [
+                        "zoom"
+                    ],
+                    0,
+                    0,
+                    18,
+                    1.4
+                ]
+            }
+        },
+        {
+            "id": "border_ward_index",
+            "type": "line",
+            "source": "vietbando",
+            "source-layer": "line_vnborder_index",
+            "minzoom": 12,
+            "maxzoom": 20,
+            "filter": [
+                "==",
+                "type",
+                3
+            ],
+            "layout": {
+                "line-cap": "round",
+                "line-join": "round"
+            },
+            "paint": {
+                "line-color": "hsl(0, 0%, 27%)",
+                "line-opacity": 1,
+                "line-dasharray": [
+                    "literal",
+                    [
+                        2,
+                        2
+                    ]
+                ],
+                "line-width": [
+                    "interpolate",
+                    [
+                        "linear"
+                    ],
+                    [
+                        "zoom"
+                    ],
+                    0,
+                    0,
+                    18,
+                    1.3
+                ]
+            }
+        },
+        {
+            "id": "metro_line_pg",
+            "source": "vietbando",
+            "source-layer": "metro_line_pg",
+            "type": "line",
+            "minzoom": 13,
+            "layout": {
+                "line-join": "round"
+            },
+            "paint": {
+                "line-color": "hsl(0, 0%, 30%)",
+                "line-opacity": {
+                    "base": 1,
+                    "stops": [
+                        [
+                            11,
+                            0
+                        ],
+                        [
+                            17,
+                            1
+                        ]
+                    ]
+                },
+                "line-width": {
+                    "base": 1,
+                    "stops": [
+                        [
+                            11,
+                            1
+                        ],
+                        [
+                            17,
+                            2
+                        ]
+                    ]
+                }
+            }
+        },
+        {
+            "id": "metro_line_pg_ref",
+            "ref": "metro_line_pg",
+            "paint": {
+                "line-color": "hsl(0, 0%, 30%)",
+                "line-opacity": {
+                    "base": 1,
+                    "stops": [
+                        [
+                            11,
+                            0
+                        ],
+                        [
+                            17,
+                            1
+                        ]
+                    ]
+                },
+                "line-dasharray": [
+                    0.2,
+                    5
+                ],
+                "line-width": {
+                    "base": 1,
+                    "stops": [
+                        [
+                            11,
+                            3
+                        ],
+                        [
+                            17,
+                            5
+                        ]
+                    ]
+                }
+            }
+        },
+        {
+            "id": "line_vnrailway_index",
+            "source": "vietbando",
+            "source-layer": "line_vnrailway_index",
+            "type": "line",
+            "minzoom": 13,
+            "layout": {
+                "line-join": "round"
+            },
+            "paint": {
+                "line-gap-width": [
+                    "interpolate",
+                    [
+                        "linear"
+                    ],
+                    [
+                        "zoom"
+                    ],
+                    15,
+                    0,
+                    16,
+                    2
+                ],
+                "line-color": "hsl(0, 0%, 30%)",
+                "line-width": [
+                    "interpolate",
+                    [
+                        "exponential",
+                        1.5
+                    ],
+                    [
+                        "zoom"
+                    ],
+                    14,
+                    0.5,
+                    20,
+                    1
+                ]
+            }
+        },
+        {
+            "id": "line_vnrailway_index_tracks",
+            "ref": "line_vnrailway_index",
+            "paint": {
+                "line-color": "hsl(0, 0%, 30%)",
+                "line-width": [
+                    "interpolate",
+                    [
+                        "exponential",
+                        1.5
+                    ],
+                    [
+                        "zoom"
+                    ],
+                    14,
+                    4,
+                    20,
+                    8
+                ],
+                "line-dasharray": [
+                    "literal",
+                    [
+                        0.1,
+                        1
+                    ]
+                ],
+                "line-opacity": [
+                    "interpolate",
+                    [
+                        "linear"
+                    ],
+                    [
+                        "zoom"
+                    ],
+                    13,
+                    0,
+                    14,
+                    1
+                ]
+            }
+        },
+        {
+            "id": "region_building3d_index",
+            "type": "fill-extrusion",
+            "source": "building",
+            "source-layer": "region_building3d_index",
+            "minzoom": 14,
+            "paint": {
+                "fill-extrusion-color": "hsl(0, 0%, 90%)",
+                "fill-extrusion-height": [
+                    "interpolate",
+                    [
+                        "linear"
+                    ],
+                    [
+                        "zoom"
+                    ],
+                    14,
+                    0,
+                    18,
+                    [
+                        "get",
+                        "height"
+                    ]
+                ],
+                "fill-extrusion-base": [
+                    "get",
+                    "base_height"
+                ],
+                "fill-extrusion-opacity": {
+                    "base": 1,
+                    "stops": [
+                        [
+                            0,
+                            0
+                        ],
+                        [
+                            14,
+                            0.1
+                        ],
+                        [
+                            19,
+                            1
+                        ]
+                    ]
+                }
+            },
+            "layout": {
+                "visibility": "none"
+            }
+        },
+        {
+            "id": "road_direct",
+            "type": "symbol",
+            "source": "vietbando",
+            "source-layer": "symbol_vnway_index",
+            "minzoom": 16,
+            "filter": [
+                "!=",
+                "direction",
+                3
+            ],
+            "layout": {
+                "icon-image": [
+                    "match",
+                    [
+                        "get",
+                        "direction"
+                    ],
+                    1,
+                    "arrow_right",
+                    2,
+                    "arrow_left",
+                    "no_entry"
+                ],
+                "icon-rotation-alignment": "map",
+                "icon-padding": 0,
+                "symbol-placement": "line",
+                "symbol-spacing": 250
+            },
+            "paint": {}
+        },
+        {
+            "id": "road_forbidden",
+            "type": "symbol",
+            "source": "vietbando",
+            "source-layer": "symbol_vnway_index",
+            "minzoom": 16,
+            "filter": [
+                "==",
+                "direction",
+                3
+            ],
+            "layout": {
+                "icon-image": "no_entry",
+                "icon-rotation-alignment": "viewport",
+                "icon-padding": 0,
+                "symbol-placement": "line",
+                "symbol-spacing": 250
+            },
+            "paint": {}
+        },
+        {
+            "id": "label_vnriverp_index",
+            "source": "vietbando",
+            "source-layer": "label_vnriverp_index",
+            "filter": [
+                "has",
+                "name"
+            ],
+            "type": "symbol",
+            "minzoom": 12,
+            "layout": {
+                "text-field": "{name}",
+                "text-font": [
+                    "Open Sans Italic",
+                    "Arial Unicode MS Regular"
+                ],
+                "text-size": {
+                    "base": 1,
+                    "stops": [
+                        [
+                            12,
+                            8
+                        ],
+                        [
+                            20,
+                            16
+                        ]
+                    ]
+                },
+                "text-pitch-alignment": "viewport",
+                "text-anchor": "center"
+            },
+            "paint": {
+                "text-color": "hsl(206, 100%, 28%)"
+            }
+        },
+        {
+            "id": "label_vnriver_index",
+            "source": "vietbando",
+            "source-layer": "label_vnriver_index",
+            "filter": [
+                "has",
+                "name"
+            ],
+            "type": "symbol",
+            "minzoom": 12,
+            "layout": {
+                "text-field": "{name}",
+                "text-font": [
+                    "Open Sans Italic",
+                    "Arial Unicode MS Regular"
+                ],
+                "text-size": {
+                    "base": 1,
+                    "stops": [
+                        [
+                            12,
+                            10
+                        ],
+                        [
+                            20,
+                            20
+                        ]
+                    ]
+                },
+                "text-pitch-alignment": "viewport",
+                "text-letter-spacing": 0.01,
+                "symbol-placement": "line",
+                "symbol-spacing": 1
+            },
+            "paint": {
+                "text-color": "hsl(206, 100%, 28%)"
+            }
+        },
+        {
+            "id": "label-vnroad-hemlo-index",
+            "type": "symbol",
+            "source": "vietbando",
+            "source-layer": "label_vnroad_index",
+            "filter": [
+                "==",
+                "level",
+                3
+            ],
+            "minzoom": 12,
+            "layout": {
+                "text-field": "{name}",
+                "text-size": {
+                    "base": 1,
+                    "stops": [
+                        [
+                            0,
+                            8
+                        ],
+                        [
+                            18,
+                            10
+                        ]
+                    ]
+                },
+                "text-font": [
+                    "Open Sans Semibold",
+                    "Arial Unicode MS Regular"
+                ],
+                "text-max-angle": 30,
+                "text-padding": 1,
+                "text-letter-spacing": 0.01,
+                "text-pitch-alignment": "viewport",
+                "text-rotation-alignment": "map",
+                "text-transform": "none",
+                "symbol-placement": "line",
+                "symbol-spacing": 100
+            },
+            "paint": {
+                "text-translate-anchor": "viewport",
+                "text-color": "hsl(0, 0%, 13%)",
+                "text-halo-color": "hsl(0, 0%, 100%)",
+                "text-halo-width": 1,
+                "text-halo-blur": 1
+            }
+        },
+        {
+            "id": "label-vnroad-huyenlo-index",
+            "type": "symbol",
+            "source": "vietbando",
+            "source-layer": "label_vnroad_index",
+            "filter": [
+                "==",
+                "level",
+                2
+            ],
+            "minzoom": 12,
+            "layout": {
+                "text-field": "{name}",
+                "text-size": {
+                    "base": 1,
+                    "stops": [
+                        [
+                            0,
+                            8
+                        ],
+                        [
+                            18,
+                            11
+                        ]
+                    ]
+                },
+                "text-font": [
+                    "Open Sans Semibold",
+                    "Arial Unicode MS Regular"
+                ],
+                "text-max-angle": 30,
+                "text-padding": 1,
+                "text-letter-spacing": 0.01,
+                "text-pitch-alignment": "viewport",
+                "text-rotation-alignment": "map",
+                "text-transform": "none",
+                "symbol-placement": "line",
+                "symbol-spacing": 130
+            },
+            "paint": {
+                "text-translate-anchor": "viewport",
+                "text-color": "hsl(0, 0%, 13%)",
+                "text-halo-color": "hsl(0, 0%, 100%)",
+                "text-halo-width": 1,
+                "text-halo-blur": 1
+            }
+        },
+        {
+            "id": "label-vnroad-tinhlo-index",
+            "type": "symbol",
+            "source": "vietbando",
+            "source-layer": "label_vnroad_index",
+            "filter": [
+                "==",
+                "level",
+                1
+            ],
+            "minzoom": 12,
+            "layout": {
+                "text-field": "{name}",
+                "text-size": {
+                    "base": 1,
+                    "stops": [
+                        [
+                            0,
+                            8
+                        ],
+                        [
+                            18,
+                            12
+                        ]
+                    ]
+                },
+                "text-font": [
+                    "Open Sans Semibold",
+                    "Arial Unicode MS Regular"
+                ],
+                "text-max-angle": 30,
+                "text-padding": 1,
+                "text-letter-spacing": 0.01,
+                "text-pitch-alignment": "viewport",
+                "text-rotation-alignment": "map",
+                "text-transform": "uppercase",
+                "symbol-placement": "line",
+                "symbol-spacing": 200
+            },
+            "paint": {
+                "text-translate-anchor": "viewport",
+                "text-color": "hsl(0, 0%, 13%)",
+                "text-halo-color": "hsl(0, 0%, 100%)",
+                "text-halo-width": 1,
+                "text-halo-blur": 1
+            }
+        },
+        {
+            "id": "label-vnroad-quoclo-index",
+            "type": "symbol",
+            "source": "vietbando",
+            "source-layer": "label_vnroad_index",
+            "filter": [
+                "in",
+                "level",
+                -1,
+                0
+            ],
+            "minzoom": 12,
+            "layout": {
+                "text-field": "{name}",
+                "text-size": {
+                    "base": 1,
+                    "stops": [
+                        [
+                            0,
+                            8
+                        ],
+                        [
+                            18,
+                            13
+                        ]
+                    ]
+                },
+                "text-font": [
+                    "Open Sans Semibold",
+                    "Arial Unicode MS Regular"
+                ],
+                "text-max-angle": 30,
+                "text-padding": 1,
+                "text-letter-spacing": 0.01,
+                "text-pitch-alignment": "viewport",
+                "text-rotation-alignment": "map",
+                "text-transform": "uppercase",
+                "symbol-placement": "line",
+                "symbol-spacing": 200
+            },
+            "paint": {
+                "text-translate-anchor": "viewport",
+                "text-color": "hsl(0, 0%, 13%)",
+                "text-halo-color": "hsl(0, 0%, 100%)",
+                "text-halo-width": 1.2,
+                "text-halo-blur": 1.2
+            }
+        },
+        {
+            "id": "label_vnshield_1_index",
+            "type": "symbol",
+            "source": "vietbando",
+            "source-layer": "label_vnshield_1_index",
+            "layout": {
+                "icon-image": "road_red_level1",
+                "icon-rotation-alignment": "viewport",
+                "symbol-placement": "line",
+                "symbol-spacing": 100,
+                "text-font": [
+                    "Open Sans Bold",
+                    "Arial Unicode MS Bold"
+                ],
+                "text-size": 9,
+                "text-transform": "uppercase",
+                "text-rotation-alignment": "viewport",
+                "text-pitch-alignment": "viewport",
+                "text-field": "{name}"
+            },
+            "paint": {
+                "text-color": "hsl(0, 0%, 100%)",
+                "text-translate-anchor": "viewport",
+                "icon-opacity": 1
+            }
+        },
+        {
+            "id": "label_vnshield_2_index",
+            "type": "symbol",
+            "source": "vietbando",
+            "source-layer": "label_vnshield_2_index",
+            "layout": {
+                "icon-image": "road_yellow_level1",
+                "icon-rotation-alignment": "viewport",
+                "symbol-placement": "line",
+                "symbol-spacing": 100,
+                "text-font": [
+                    "Open Sans Bold",
+                    "Arial Unicode MS Bold"
+                ],
+                "text-size": 9,
+                "text-transform": "uppercase",
+                "text-rotation-alignment": "viewport",
+                "text-pitch-alignment": "viewport",
+                "text-field": "{name}"
+            },
+            "paint": {
+                "text-color": "hsl(0, 0%, 0%)",
+                "text-translate-anchor": "viewport",
+                "icon-opacity": 1
+            }
+        },
+        {
+            "id": "label_vnpoi_index",
+            "source": "vietbando",
+            "source-layer": "label_vnpoi_index",
+            "type": "symbol",
+            "minzoom": 13,
+            "filter": [
+                "has",
+                "name"
+            ],
+            "layout": {
+                "text-field": "{name}",
+                "text-font": [
+                    "Open Sans Bold",
+                    "Arial Unicode MS Bold"
+                ],
+                "text-size": [
+                    "interpolate",
+                    [
+                        "linear"
+                    ],
+                    [
+                        "zoom"
+                    ],
+                    10,
+                    10,
+                    16,
+                    12
+                ],
+                "text-anchor": "top",
+                "text-padding": 4,
+                "text-pitch-alignment": "viewport",
+                "text-offset": [
+                    0,
+                    0.8
+                ],
+                "icon-image": "{categoryco}",
+                "icon-padding": 0,
+                "icon-allow-overlap": false
+            },
+            "paint": {
+                "text-color": [
+                    "case",
+                    [
+                        "==",
+                        [
+                            "get",
+                            "groupcode"
+                        ],
+                        5
+                    ],
+                    "hsl(0, 90%, 60%)",
+                    [
+                        "==",
+                        [
+                            "get",
+                            "groupcode"
+                        ],
+                        6
+                    ],
+                    "hsl(250, 75%, 60%)",
+                    [
+                        "==",
+                        [
+                            "get",
+                            "groupcode"
+                        ],
+                        11
+                    ],
+                    "hsl(250, 75%, 60%)",
+                    [
+                        "==",
+                        [
+                            "get",
+                            "categoryco"
+                        ],
+                        7332
+                    ],
+                    "hsl(250, 75%, 60%)",
+                    [
+                        "==",
+                        [
+                            "get",
+                            "categoryco"
+                        ],
+                        7350
+                    ],
+                    "hsl(250, 75%, 60%)",
+                    [
+                        "==",
+                        [
+                            "get",
+                            "categoryco"
+                        ],
+                        7377
+                    ],
+                    "hsl(250, 75%, 60%)",
+                    [
+                        "==",
+                        [
+                            "get",
+                            "categoryco"
+                        ],
+                        7373
+                    ],
+                    "hsl(250, 75%, 60%)",
+                    [
+                        "==",
+                        [
+                            "get",
+                            "categoryco"
+                        ],
+                        7372
+                    ],
+                    "hsl(250, 75%, 60%)",
+                    [
+                        "==",
+                        [
+                            "get",
+                            "groupcode"
+                        ],
+                        2
+                    ],
+                    "hsl(30, 50%, 30%)",
+                    [
+                        "==",
+                        [
+                            "get",
+                            "groupcode"
+                        ],
+                        7
+                    ],
+                    "hsl(30, 50%, 30%)",
+                    [
+                        "==",
+                        [
+                            "get",
+                            "groupcode"
+                        ],
+                        10
+                    ],
+                    "hsl(30, 50%, 30%)",
+                    [
+                        "==",
+                        [
+                            "get",
+                            "categoryco"
+                        ],
+                        7327
+                    ],
+                    "hsl(30, 50%, 30%)",
+                    "hsl(0,  0%, 15%)"
+                ],
+                "text-halo-color": "hsl(0, 0%, 95%)",
+                "text-halo-width": 1,
+                "text-halo-blur": 1
+            }
+        },
+        {
+            "id": "metro_point_pg",
+            "source": "vietbando",
+            "source-layer": "metro_point_pg",
+            "type": "symbol",
+            "metadata": {},
+            "minzoom": 15,
+            "filter": [
+                "has",
+                "name"
+            ],
+            "layout": {
+                "text-field": "{name}",
+                "text-font": [
+                    "Open Sans Bold",
+                    "Arial Unicode MS Bold"
+                ],
+                "text-size": [
+                    "interpolate",
+                    [
+                        "linear"
+                    ],
+                    [
+                        "zoom"
+                    ],
+                    10,
+                    10,
+                    16,
+                    14
+                ],
+                "text-anchor": "top",
+                "text-padding": 4,
+                "text-pitch-alignment": "viewport",
+                "text-offset": [
+                    0,
+                    0.8
+                ],
+                "icon-image": "7380",
+                "icon-padding": 0,
+                "icon-allow-overlap": false
+            },
+            "paint": {
+                "text-color": [
+                    "case",
+                    [
+                        "==",
+                        [
+                            "get",
+                            "groupcode"
+                        ],
+                        5
+                    ],
+                    "hsl(0, 90%, 60%)",
+                    [
+                        "==",
+                        [
+                            "get",
+                            "groupcode"
+                        ],
+                        6
+                    ],
+                    "hsl(250, 75%, 60%)",
+                    [
+                        "==",
+                        [
+                            "get",
+                            "groupcode"
+                        ],
+                        11
+                    ],
+                    "hsl(250, 75%, 60%)",
+                    [
+                        "==",
+                        [
+                            "get",
+                            "categoryco"
+                        ],
+                        7332
+                    ],
+                    "hsl(250, 75%, 60%)",
+                    [
+                        "==",
+                        [
+                            "get",
+                            "categoryco"
+                        ],
+                        7350
+                    ],
+                    "hsl(250, 75%, 60%)",
+                    [
+                        "==",
+                        [
+                            "get",
+                            "categoryco"
+                        ],
+                        7377
+                    ],
+                    "hsl(250, 75%, 60%)",
+                    [
+                        "==",
+                        [
+                            "get",
+                            "categoryco"
+                        ],
+                        7373
+                    ],
+                    "hsl(250, 75%, 60%)",
+                    [
+                        "==",
+                        [
+                            "get",
+                            "categoryco"
+                        ],
+                        7372
+                    ],
+                    "hsl(250, 75%, 60%)",
+                    [
+                        "==",
+                        [
+                            "get",
+                            "groupcode"
+                        ],
+                        2
+                    ],
+                    "hsl(30, 50%, 30%)",
+                    [
+                        "==",
+                        [
+                            "get",
+                            "groupcode"
+                        ],
+                        7
+                    ],
+                    "hsl(30, 50%, 30%)",
+                    [
+                        "==",
+                        [
+                            "get",
+                            "groupcode"
+                        ],
+                        10
+                    ],
+                    "hsl(30, 50%, 30%)",
+                    [
+                        "==",
+                        [
+                            "get",
+                            "categoryco"
+                        ],
+                        7327
+                    ],
+                    "hsl(30, 50%, 30%)",
+                    "hsl(0,  0%, 15%)"
+                ],
+                "text-halo-color": "hsl(0, 0%, 95%)",
+                "text-halo-width": 1,
+                "text-halo-blur": 1
+            }
+        },
+        {
+            "id": "label_vnadmin_10_index",
+            "source": "vietbando",
+            "source-layer": "label_vnadmin_index",
+            "type": "symbol",
+            "minzoom": 14,
+            "maxzoom": 20,
+            "filter": [
+                "in",
+                "level",
+                3
+            ],
+            "layout": {
+                "text-field": "{name}",
+                "text-letter-spacing": {
+                    "base": 1,
+                    "stops": [
+                        [
+                            14,
+                            0
+                        ],
+                        [
+                            20,
+                            0.01
+                        ]
+                    ]
+                },
+                "text-font": [
+                    "Open Sans Bold",
+                    "Arial Unicode MS Bold"
+                ],
+                "text-size": {
+                    "base": 1,
+                    "stops": [
+                        [
+                            14,
+                            10
+                        ],
+                        [
+                            20,
+                            10
+                        ]
+                    ]
+                }
+            },
+            "paint": {
+                "text-color": "hsl(30, 100%, 19%)",
+                "text-halo-blur": {
+                    "base": 1,
+                    "stops": [
+                        [
+                            12,
+                            0.7
+                        ],
+                        [
+                            17,
+                            1.4
+                        ]
+                    ]
+                },
+                "text-halo-color": "hsl(0, 0%, 100%)",
+                "text-halo-width": {
+                    "base": 1,
+                    "stops": [
+                        [
+                            12,
+                            0.7
+                        ],
+                        [
+                            17,
+                            1.4
+                        ]
+                    ]
+                }
+            }
+        },
+        {
+            "id": "label_vnward_index_admin1",
+            "source": "vietbando",
+            "source-layer": "label_vnward_index",
+            "type": "symbol",
+            "minzoom": 12,
+            "layout": {
+                "text-field": "{admin_1}",
+                "text-size": 11,
+                "symbol-placement": "line",
+                "symbol-spacing": 250,
+                "text-offset": [
+                    0,
+                    -1
+                ],
+                "text-keep-upright": true,
+                "text-allow-overlap": true,
+                "symbol-avoid-edges": false,
+                "text-transform": "uppercase",
+                "text-font": [
+                    "Open Sans Bold",
+                    "Arial Unicode MS Bold"
+                ]
+            },
+            "paint": {
+                "text-color": "hsl(30, 100%, 19%)",
+                "text-halo-blur": 1,
+                "text-halo-color": "hsl(0, 0%, 100%)",
+                "text-halo-width": 1
+            }
+        },
+        {
+            "id": "label_vnward_index_admin_2",
+            "source": "vietbando",
+            "source-layer": "label_vnward_index",
+            "type": "symbol",
+            "minzoom": 12,
+            "layout": {
+                "text-field": "{admin_2}",
+                "text-size": 11,
+                "symbol-placement": "line",
+                "symbol-spacing": 250,
+                "text-offset": [
+                    0,
+                    1
+                ],
+                "text-keep-upright": true,
+                "text-allow-overlap": true,
+                "symbol-avoid-edges": false,
+                "text-transform": "uppercase",
+                "text-font": [
+                    "Open Sans Bold",
+                    "Arial Unicode MS Bold"
+                ]
+            },
+            "paint": {
+                "text-color": "hsl(30, 100%, 19%)",
+                "text-halo-blur": 1,
+                "text-halo-color": "hsl(0, 0%, 100%)",
+                "text-halo-width": 1
+            }
+        },
+        {
+            "id": "label_vnwards_index",
+            "source": "vietbando",
+            "source-layer": "label_vnwards_index",
+            "type": "symbol",
+            "minzoom": 8,
+            "maxzoom": 17,
+            "filter": [
+                "has",
+                "name"
+            ],
+            "layout": {
+                "text-field": "{name}",
+                "text-letter-spacing": {
+                    "base": 1,
+                    "stops": [
+                        [
+                            8,
+                            0
+                        ],
+                        [
+                            17,
+                            0.1
+                        ]
+                    ]
+                },
+                "text-transform": "uppercase",
+                "text-font": [
+                    "Open Sans Bold",
+                    "Arial Unicode MS Bold"
+                ],
+                "text-size": {
+                    "base": 1,
+                    "stops": [
+                        [
+                            8,
+                            10
+                        ],
+                        [
+                            17,
+                            16
+                        ]
+                    ]
+                }
+            },
+            "paint": {
+                "text-color": "hsl(30, 100%, 19%)",
+                "text-halo-blur": {
+                    "base": 1,
+                    "stops": [
+                        [
+                            8,
+                            0.7
+                        ],
+                        [
+                            17,
+                            1.4
+                        ]
+                    ]
+                },
+                "text-halo-color": "hsl(0, 0%, 100%)",
+                "text-halo-width": {
+                    "base": 1,
+                    "stops": [
+                        [
+                            8,
+                            0.7
+                        ],
+                        [
+                            17,
+                            1.4
+                        ]
+                    ]
+                }
+            }
+        },
+        {
+            "id": "label_wcities_index",
+            "source": "vt_background",
+            "source-layer": "label_wcities_index",
+            "type": "symbol",
+            "minzoom": 5,
+            "maxzoom": 10,
+            "filter": [
+                "has",
+                "name"
+            ],
+            "layout": {
+                "text-field": "{name}",
+                "text-transform": "uppercase",
+                "text-letter-spacing": {
+                    "base": 1,
+                    "stops": [
+                        [
+                            0,
+                            0
+                        ],
+                        [
+                            12,
+                            0.1
+                        ]
+                    ]
+                },
+                "text-font": [
+                    "Open Sans Bold",
+                    "Arial Unicode MS Bold"
+                ],
+                "text-size": {
+                    "base": 1,
+                    "stops": [
+                        [
+                            5,
+                            8
+                        ],
+                        [
+                            12,
+                            14
+                        ]
+                    ]
+                },
+                "text-anchor": "bottom",
+                "icon-image": "city_level1",
+                "icon-offset": [
+                    0,
+                    6
+                ]
+            },
+            "paint": {
+                "text-color": "hsl(0, 0%, 27%)",
+                "text-halo-blur": {
+                    "base": 1,
+                    "stops": [
+                        [
+                            5,
+                            1
+                        ],
+                        [
+                            12,
+                            2
+                        ]
+                    ]
+                },
+                "text-halo-color": "hsl(0, 0%, 100%)",
+                "text-halo-width": {
+                    "base": 1,
+                    "stops": [
+                        [
+                            5,
+                            1
+                        ],
+                        [
+                            12,
+                            2
+                        ]
+                    ]
+                }
+            }
+        },
+        {
+            "id": "label_vnprovince_index_admin1",
+            "source": "vietbando",
+            "source-layer": "label_vnprovince_index",
+            "type": "symbol",
+            "minzoom": 11,
+            "layout": {
+                "text-field": "{admin_1}",
+                "text-size": 14,
+                "symbol-placement": "line",
+                "symbol-spacing": 300,
+                "text-offset": [
+                    0,
+                    -1
+                ],
+                "text-keep-upright": true,
+                "text-allow-overlap": true,
+                "symbol-avoid-edges": false,
+                "text-transform": "uppercase",
+                "text-font": [
+                    "Open Sans Bold",
+                    "Arial Unicode MS Bold"
+                ]
+            },
+            "paint": {
+                "text-color": "hsl(0, 0%, 20%)",
+                "text-halo-blur": 1,
+                "text-halo-color": "hsl(0, 0%, 100%)",
+                "text-halo-width": 1
+            }
+        },
+        {
+            "id": "label_vnprovince_index_admin_2",
+            "source": "vietbando",
+            "source-layer": "label_vnprovince_index",
+            "type": "symbol",
+            "minzoom": 11,
+            "layout": {
+                "text-field": "{admin_2}",
+                "text-size": 14,
+                "symbol-placement": "line",
+                "symbol-spacing": 300,
+                "text-offset": [
+                    0,
+                    1
+                ],
+                "text-keep-upright": true,
+                "text-allow-overlap": true,
+                "symbol-avoid-edges": false,
+                "text-transform": "uppercase",
+                "text-font": [
+                    "Open Sans Bold",
+                    "Arial Unicode MS Bold"
+                ]
+            },
+            "paint": {
+                "text-color": "hsl(0, 0%, 20%)",
+                "text-halo-blur": 1,
+                "text-halo-color": "hsl(0, 0%, 100%)",
+                "text-halo-width": 1
+            }
+        },
+        {
+            "id": "label_vnprovinces_index",
+            "source": "vietbando",
+            "source-layer": "label_vnprovinces_index",
+            "type": "symbol",
+            "minzoom": 4,
+            "maxzoom": 11,
+            "filter": [
+                "has",
+                "name"
+            ],
+            "layout": {
+                "text-field": "{name}",
+                "text-transform": "uppercase",
+                "text-letter-spacing": {
+                    "base": 1,
+                    "stops": [
+                        [
+                            4,
+                            0
+                        ],
+                        [
+                            10,
+                            0.1
+                        ]
+                    ]
+                },
+                "text-font": [
+                    "Open Sans Bold",
+                    "Arial Unicode MS Bold"
+                ],
+                "text-size": {
+                    "base": 1,
+                    "stops": [
+                        [
+                            4,
+                            6
+                        ],
+                        [
+                            10,
+                            20
+                        ]
+                    ]
+                }
+            },
+            "paint": {
+                "text-color": "hsl(0, 0%, 20%)",
+                "text-halo-blur": {
+                    "base": 1,
+                    "stops": [
+                        [
+                            8,
+                            1
+                        ],
+                        [
+                            10,
+                            2
+                        ]
+                    ]
+                },
+                "text-halo-color": "hsl(0, 0%, 100%)",
+                "text-halo-width": {
+                    "base": 1,
+                    "stops": [
+                        [
+                            8,
+                            1
+                        ],
+                        [
+                            10,
+                            2
+                        ]
+                    ]
+                }
+            }
+        },
+        {
+            "id": "label_wcapitals_index",
+            "source": "vt_background",
+            "source-layer": "label_wcapitals_index",
+            "type": "symbol",
+            "minzoom": 2,
+            "maxzoom": 8,
+            "filter": [
+                "has",
+                "name"
+            ],
+            "layout": {
+                "text-field": "{name}",
+                "text-font": [
+                    "Open Sans Bold",
+                    "Arial Unicode MS Bold"
+                ],
+                "text-size": {
+                    "base": 1,
+                    "stops": [
+                        [
+                            0,
+                            8
+                        ],
+                        [
+                            10,
+                            18
+                        ]
+                    ]
+                },
+                "icon-image": "capital",
+                "text-anchor": "bottom",
+                "icon-offset": [
+                    0,
+                    6
+                ]
+            },
+            "paint": {
+                "text-color": "hsl(0, 50%, 40%)",
+                "text-halo-color": "hsl(0, 0%, 100%)",
+                "text-halo-width": 1
+            }
+        },
+        {
+            "id": "label_wcontrtry_index",
+            "source": "vt_background",
+            "source-layer": "label_wcontrtry_index",
+            "type": "symbol",
+            "minzoom": 2,
+            "maxzoom": 8,
+            "filter": [
+                "has",
+                "name"
+            ],
+            "layout": {
+                "text-field": "{name}",
+                "text-font": [
+                    "Open Sans Semibold",
+                    "Arial Unicode MS Regular"
+                ],
+                "text-size": {
+                    "base": 1,
+                    "stops": [
+                        [
+                            1,
+                            10
+                        ],
+                        [
+                            8,
+                            24
+                        ]
+                    ]
+                },
+                "text-transform": "uppercase"
+            },
+            "paint": {
+                "text-color": "hsl(0, 0%, 20%)",
+                "text-halo-color": "hsl(0, 0%, 100%)",
+                "text-halo-width": 1
+            }
+        },
+        {
+            "id": "label_vnislands_index",
+            "source": "vietbando",
+            "source-layer": "label_vnislands_index",
+            "type": "symbol",
+            "minzoom": 3,
+            "filter": [
+                "has",
+                "name"
+            ],
+            "layout": {
+                "text-field": "{name}",
+                "text-font": [
+                    "Open Sans Italic",
+                    "Arial Unicode MS Regular"
+                ],
+                "text-size": {
+                    "base": 1,
+                    "stops": [
+                        [
+                            3,
+                            10
+                        ],
+                        [
+                            19,
+                            20
+                        ]
+                    ]
+                }
+            },
+            "paint": {
+                "text-color": "hsl(206, 100%, 16%)",
+                "text-halo-color": "hsl(0, 0%, 100%)",
+                "text-halo-width": 1,
+                "text-halo-blur": 1
+            }
+        },
+        {
+            "id": "label_vnmarine_line_index",
+            "source": "vt_background",
+            "source-layer": "label_vnmarine_line_index",
+            "type": "symbol",
+            "minzoom": 4,
+            "maxzoom": 8,
+            "filter": [
+                "has",
+                "name"
+            ],
+            "layout": {
+                "text-field": "{name}",
+                "text-size": {
+                    "stops": [
+                        [
+                            4,
+                            10
+                        ],
+                        [
+                            12,
+                            30
+                        ]
+                    ]
+                },
+                "text-letter-spacing": {
+                    "stops": [
+                        [
+                            0,
+                            0.1
+                        ],
+                        [
+                            2,
+                            0.2
+                        ],
+                        [
+                            3,
+                            0.3
+                        ],
+                        [
+                            4,
+                            0.4
+                        ],
+                        [
+                            5,
+                            0.5
+                        ]
+                    ]
+                },
+                "symbol-placement": "line",
+                "text-transform": "uppercase",
+                "text-font": [
+                    "Open Sans Italic",
+                    "Arial Unicode MS Regular"
+                ]
+            },
+            "paint": {
+                "text-color": "hsl(0, 0%, 100%)"
+            }
+        },
+        {
+            "id": "label_wmarine_point_index",
+            "type": "symbol",
+            "source": "vt_background",
+            "source-layer": "label_wmarine_index",
+            "minzoom": 2,
+            "maxzoom": 9,
+            "filter": [
+                "in",
+                "featurecla",
+                "sea",
+                "ocean"
+            ],
+            "layout": {
+                "text-field": "{name}",
+                "text-size": {
+                    "base": 1,
+                    "stops": [
+                        [
+                            0,
+                            10
+                        ],
+                        [
+                            5,
+                            14
+                        ],
+                        [
+                            6,
+                            18
+                        ],
+                        [
+                            7,
+                            22
+                        ],
+                        [
+                            8,
+                            28
+                        ]
+                    ]
+                },
+                "text-letter-spacing": {
+                    "base": 1,
+                    "stops": [
+                        [
+                            0,
+                            0.1
+                        ],
+                        [
+                            5,
+                            0.2
+                        ],
+                        [
+                            6,
+                            0.4
+                        ],
+                        [
+                            7,
+                            0.8
+                        ],
+                        [
+                            8,
+                            1.2
+                        ]
+                    ]
+                },
+                "text-max-width": 60,
+                "text-transform": "uppercase",
+                "text-font": [
+                    "Open Sans Italic",
+                    "Arial Unicode MS Regular"
+                ]
+            },
+            "paint": {
+                "text-color": "hsl(0, 0%, 100%)"
+            }
+        },
+        {
+            "id": "label_wcontient_index",
+            "source": "vt_background",
+            "source-layer": "label_wcontient_index",
+            "type": "symbol",
+            "maxzoom": 5,
+            "filter": [
+                "has",
+                "name"
+            ],
+            "layout": {
+                "text-field": "{name}",
+                "text-font": [
+                    "Open Sans Semibold",
+                    "Arial Unicode MS Regular"
+                ],
+                "text-transform": "uppercase",
+                "text-size": {
+                    "base": 1,
+                    "stops": [
+                        [
+                            0,
+                            10
+                        ],
+                        [
+                            2,
+                            20
+                        ],
+                        [
+                            3,
+                            30
+                        ]
+                    ]
+                },
+                "text-letter-spacing": {
+                    "base": 1,
+                    "stops": [
+                        [
+                            0,
+                            0.1
+                        ],
+                        [
+                            2,
+                            0.2
+                        ],
+                        [
+                            3,
+                            0.4
+                        ]
+                    ]
+                }
+            },
+            "paint": {
+                "text-color": "hsl(0, 0%, 0%)"
+            }
+        }
+    ]
+}
