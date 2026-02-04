@@ -266,7 +266,7 @@ export class EditLayer implements Custom3DTileRenderLayer {
         });
     }
 
-    addObjectToScene(id: string, default_scale: number = 1): void {
+    addObjectToScene(id: string, lat : number, lon : number, default_scale: number = 1): void {
         if (!this.map || !this.modelCache) {
             return;
         }
@@ -277,7 +277,7 @@ export class EditLayer implements Custom3DTileRenderLayer {
         const root_obj = model_data.object3d;
         if (!root_obj) return;
         const center = this.map.getCenter();
-        const local = latlonToLocal(center.lng, center.lat, this.editorLevel);
+        const local = latlonToLocal(lon, lat, this.editorLevel);
         const key = this.tileKey(local.tileX, local.tileY, local.tileZ);
         const tileData = this.getTileData(key);
         const cloneObj3d = root_obj.clone(true);

@@ -15,65 +15,24 @@ export function createYupToZUpMatrix(): THREE.Matrix4 {
     );
     return matrix;
 }
-
-/*export function applyWorldTransform(obj: THREE.Object3D): void {
-    // Cập nhật world matrix cho toàn bộ cây
-    obj.updateMatrixWorld(true);
-    // Apply transform vào geometry của tất cả mesh
-    obj.traverse((child) => {
-        if (child instanceof THREE.Mesh) {
-            const geometry = child.geometry;
-            // Apply world matrix vào geometry
-            geometry.applyMatrix4(child.matrixWorld);
-            // Cập nhật lại các thuộc tính geometry
-            geometry.computeVertexNormals();
-            geometry.computeBoundingSphere();
-            geometry.computeBoundingBox();
-        }
-    });
-    obj.traverse((child) => {
-        child.position.set(0, 0, 0);
-        child.rotation.set(0, 0, 0);
-        child.scale.set(1, 1, 1);
-        child.updateMatrix();
-    });
-    obj.updateMatrixWorld(true);
-}
 export function convertRawMeshYupToZup(mesh: THREE.Mesh): void {
     const matrix_y_up_to_z_up: THREE.Matrix4 = createYupToZUpMatrix();
     const tmpMatrix = new THREE.Matrix4();
     tmpMatrix.multiplyMatrices(matrix_y_up_to_z_up, mesh.matrixWorld);
-  /!*  const tmpMatrix = new THREE.Matrix4();
-    tmpMatrix.multiplyMatrices(matrix_y_up_to_z_up, mesh.matrixWorld);*!/
-    /!*mesh.geometry.applyMatrix4(matrix_y_up_to_z_up);
+    mesh.geometry.applyMatrix4(tmpMatrix);
     mesh.updateMatrix();
     mesh.updateMatrixWorld(true);
     mesh.geometry.computeVertexNormals();
-
     mesh.geometry.computeBoundingBox();
-    mesh.geometry.computeBoundingSphere();*!/
-    //mesh.applyMatrix4(matrix_y_up_to_z_up);
-    //mesh.updateMatrixWorld(true);
+    mesh.geometry.computeBoundingSphere();
 }
 export function bakeWorldAndConvertYupToZup(root: THREE.Object3D): void {
-    const yupToZup = createYupToZUpMatrix();
-    //root.updateMatrixWorld(true);
-    // 1. Apply Y-up → Z-up ở LOCAL SPACE
+    root.updateMatrixWorld(true);
     root.traverse(obj => {
         if (!(obj instanceof THREE.Mesh)) return;
-        obj.geometry = obj.geometry.clone();
-        obj.geometry.applyMatrix4(yupToZup);
+        convertRawMeshYupToZup(obj);
+        reverseFaceWinding(obj.geometry);
     });
-    // 2. Update world matrix SAU khi đổi trục
-    // 3. Bake world matrix
-    root.traverse(obj => {
-        if (!(obj instanceof THREE.Mesh)) return;
-        obj.geometry.applyMatrix4(obj.matrixWorld);
-        obj.geometry.computeVertexNormals();
-        obj.geometry.computeBoundingBox();
-        obj.geometry.computeBoundingSphere();
-    });
-
     // 4. Reset toàn bộ hierarchy
     root.traverse(obj => {
         obj.position.set(0, 0, 0);
@@ -82,8 +41,8 @@ export function bakeWorldAndConvertYupToZup(root: THREE.Object3D): void {
         obj.updateMatrix();
         obj.updateMatrixWorld();
     });
-    //root.updateMatrixWorld(true);
-}*/
+    root.updateMatrixWorld(true);
+}
 
 
 export function downloadTexture(url: string): Promise<THREE.Texture> {
@@ -215,6 +174,20 @@ export async function loadModelFromGlb(url: string): Promise<ModelData> {
     }
 }
 
+//load model for instancing layer
+export async function loadModelFromGlbNotAnimation(url: string): Promise<THREE.Object3D> {
+    const loader = new GLTFLoader();
+    try {
+        const gltf = await loader.loadAsync(url);
+        const obj = gltf.scene as THREE.Object3D;
+        return obj;
+    } catch (err) {
+        console.error(`[loadModelFromGlb] failed to load`, url, err);
+        throw err;
+    }
+}
+
+
 /*export function prepareModelForEditor() : void {
 
 }*/
@@ -260,34 +233,33 @@ export function decomposeObject(model: THREE.Object3D) {
 export function createLightGroup(scene: THREE.Scene, dir: THREE.Vector3): void {
     const light_group = new THREE.Group();
     light_group.name = 'light_group';
-
     // Directional Light - Ánh nắng mặt trời buổi sáng
-    const dirLight = new THREE.DirectionalLight(0xffffff, 5);
+    const dirLight = new THREE.DirectionalLight(0xffffff, 2);
     dirLight.name = 'dir_light';
     dirLight.color.setHSL(
-        0.12,  // H: vàng ấm của nắng sớm
-        0.7,   // S: giảm một chút để không quá vàng
-        0.98   // L: rất sáng
+        0.12,
+        0.7,
+        0.98
     );
-    dirLight.target.position.copy(dir.clone().multiplyScalar(5000));
+    dirLight.target.position.copy(dir.clone().multiplyScalar(10000));
     light_group.add(dirLight);
     light_group.add(dirLight.target);
     // Hemisphere Light - Ánh sáng tán xạ từ bầu trời
     const hemiLight = new THREE.HemisphereLight(0xffffff, 0xffffff, 2.5);
     hemiLight.name = 'hemi_light';
     hemiLight.color.setHSL(
-        0.55,  // H: xanh trời sáng
-        0.4,   // S: nhẹ nhàng hơn
-        0.95   // L: rất sáng
+        0.55,
+        0.4,
+        0.95
     );
     hemiLight.groundColor.setHSL(
-        0.08,  // H: vàng cam nhạt
-        0.25,  // S: ít hơn
-        0.6    // L: sáng hơn
+        0.08,
+        0.25,
+        0.6
     );
-    hemiLight.position.set(0, 0, -1);
+    hemiLight.position.set(0, 0, 1);
     light_group.add(hemiLight);
-    // Ambient Light - Tăng mạnh để đảm bảo mọi thứ sáng
+
     const ambientLight = new THREE.AmbientLight(0xffffff, 1.2);
     ambientLight.color.setHSL(0.15, 0.2, 1);
     light_group.add(ambientLight);

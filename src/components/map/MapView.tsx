@@ -5,7 +5,7 @@ import type {WebGLContextAttributesWithType} from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css';
 import './MapView.css'
 import {type EditableLayer, LayerEditControl} from '../toolbar/LayerEditCtrl'
-import {Map4DModelsThreeLayer} from './Layer4DModels.ts'
+import {Map4DModelsThreeLayer} from './3dlayer/Layer4DModels.ts'
 import {OverlayLayer} from './gizmo/OverlayLayer'
 import {getSunPosition} from './shadow/ShadowHelper.ts'
 import OutlineLayer from './gizmo/OutlineLayer.ts'
@@ -14,6 +14,9 @@ import {loadModelFromGlb} from './model/objModel.ts'
 import {EditLayer} from "./EditLayer.ts";
 import type {Custom3DTileRenderLayer} from "./Interface.ts";
 import {CustomEditLayerManager} from "./CustomEditLayerManager.ts"
+import {WaterLayer} from "./water/WaterLayer.ts"
+import {CustomVectorSource} from "./source/CustomVectorSource.ts"
+import {InstanceLayer} from "./instance/InstanceLayer.ts"
 
 interface MapViewProps {
     center?: [number, number];
@@ -92,7 +95,7 @@ function addEditorLayerToMap(
     const new_editor_layer = createNewEditorLayer(
         map,
     );
-    const str_glb_path_array = ['/test_data/windmill__animated.glb'];
+    const str_glb_path_array = ['/test_data/Untitled.glb'];
     str_glb_path_array.forEach((path) => {
         loadModelFromGlb(path)
             .then((modeldata) => {
@@ -101,7 +104,7 @@ function addEditorLayerToMap(
                     id: path,
                     modeldata
                 }]);
-                new_editor_layer.addObjectToScene(path, 100);
+                new_editor_layer.addObjectToScene(path, 10);
             })
             .catch((e) => {
                 console.error('Load GLB failed:', path, e);
@@ -149,6 +152,53 @@ function createDefaultMap(map: maplibregl.Map, overlay_layer: OverlayLayer, outl
     });
     map4d_layer.setSunPos(sunPos.altitude, sunPos.azimuth);
     map.addLayer(map4d_layer);
+    //create source
+    const sourceUrl = 'https://images.daklak.gov.vn/v2/tile/{z}/{x}/{y}/306ec9b5-8146-4a83-9271-bd7b343a574a';
+    const customSource = new CustomVectorSource({
+        id: 'test-custom-source',
+        url: sourceUrl,
+        minZoom: 0,
+        maxZoom: 16,
+        tileSize: 512,
+        maxTileCache: 1024,
+        map: map,
+    });
+    //create water layer
+    const waterLayer = new WaterLayer({
+        id: 'test_water_layer',
+        applyGlobeMatrix: false,
+        sourceLayer: 'region_river_index',
+        sun: sun_options,
+    });
+    waterLayer.setVectorSource(customSource);
+    map.addLayer(
+        waterLayer,
+        'fill-vnairport-index'
+    );
+    //create instance layer
+    const instanceCustomSouce = new CustomVectorSource({
+        id: 'test-custom-source',
+        url: 'http://10.222.3.81:8083/VietbandoMapService/api/image/?Function=GetVectorTile&MapName=IndoorNavigation&Level={z}&TileX={x}&TileY={y}&UseTileCache=true',
+        minZoom: 0,
+        maxZoom: 16,
+        tileSize: 512,
+        maxTileCache: 1024,
+        map: map,
+    });
+    const instance_layer = new InstanceLayer({
+        id: 'example_tree',
+        sourceLayer: 'trees',
+        applyGlobeMatrix: false,
+        sun: sun_options,
+        objectUrl: [
+            '/test_data/test_instance/tree2.glb',
+            '/test_data/test_instance/tree3.glb',
+            '/test_data/test_instance/tree4.glb',
+            '/test_data/test_instance/tree5.glb',
+            '/test_data/test_instance/tree6.glb']
+    });
+    instance_layer.setVectorSource(instanceCustomSouce);
+    map.addLayer(instance_layer);
 }
 
 function addControlMaplibre(map: maplibregl.Map): void {
@@ -176,7 +226,6 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(({
         //create map cache
         editorLayerManager.current = new CustomEditLayerManager();
         const style_path = import.meta.env.VITE_STYLE_PATH;
-
         let canvas_config: WebGLContextAttributesWithType = {};
         const is_high_performance_render = import.meta.env.VITE_HIGH_PERFORMANCE_RENDER;
         if (is_high_performance_render === 'true') {
@@ -192,13 +241,13 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(({
             style: style_path, // Free demo tiles
             center: center,
             zoom: zoom,
-            pitch: 60,
-            bearing: -60,
+            pitch: 0,
+            bearing: 0,
             canvasContextAttributes: canvas_config
         });
+        //map.current._showTileBoundaries = true;
         // Thêm controls
         addControlMaplibre(map.current);
-        //map.current.showTileBoundaries = true;
         // Tao overlay truoc
         overlay_layer.current = createOverLayer();
         // Tao outline Layer
@@ -217,6 +266,12 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(({
         });
         map.current.on('styledata', () => {
             const layers = map.current?.style._layers;
+            /* if (map.current?.style.getLayer("region-river-index")) {
+                 map.current?.style.removeLayer("region-river-index");
+             }*/
+            /*if (map.current?.style.getLayer("fill-vnbridge-quoclo-index")) {
+                map.current?.style.removeLayer("fill-vnbridge-quoclo-index");
+            }*/
             setCustomLayers([]);
             const layers_edit: EditableLayer[] = [];
             if (layers) {

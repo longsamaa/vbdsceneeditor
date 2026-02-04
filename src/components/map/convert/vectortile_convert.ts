@@ -5,14 +5,12 @@ export function parseVectorTile(buffer: ArrayBuffer): VectorTile {
     const pbf = new Protobuf(buffer);
     return new VectorTile(pbf);
 }
-
-export function getLayerFeatures(tile: VectorTile, layerName: string): any {
+export function getLayerFeatures(tile: VectorTile, layerName: string) {
     const layer = tile.layers[layerName];
     if (!layer) {
         console.warn(`Layer ${layerName} not found`);
         return [];
     }
-
     const features = [];
     for (let i = 0; i < layer.length; i++) {
         const feature = layer.feature(i);

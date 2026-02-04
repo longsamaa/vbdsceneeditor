@@ -15,18 +15,18 @@ import type {
     SunParamater,
     PickHit,
     Custom3DTileRenderLayer
-} from './Interface.ts';
-import {tileLocalToLatLon, getMetersPerExtentUnit, clampZoom} from './convert/map_convert';
-import {requestVectorTile} from './tile/request';
-import {parseVectorTile} from './convert/vectortile_convert';
-import {parseTileInfo} from './tile/tile';
-import {createLightGroup, transformModel} from './model/objModel'
-import {calculateSunDirectionMaplibre} from './shadow/ShadowHelper'
+} from '../Interface.ts';
+import {tileLocalToLatLon, getMetersPerExtentUnit, clampZoom} from '../convert/map_convert.ts';
+import {requestVectorTile} from '../tile/request.ts';
+import {parseVectorTile} from '../convert/vectortile_convert.ts';
+import {parseTileInfo} from '../tile/tile.ts';
+import {createLightGroup, transformModel} from '../model/objModel.ts'
+import {calculateSunDirectionMaplibre} from '../shadow/ShadowHelper.ts'
 import {
     downloadModel,
     prepareModelForRender,
-} from './model/objModel';
-import {MaplibreShadowMesh} from "./shadow/ShadowGeometry";
+} from '../model/objModel.ts';
+import {MaplibreShadowMesh} from "../shadow/ShadowGeometry.ts";
 
 /** Config cho layer */
 export type Map4DModelsLayerOptions = {
@@ -84,7 +84,6 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer {
     private readonly maxZoom: number;
     private readonly tileSize: number;
     private readonly applyGlobeMatrix: boolean;
-
     private tileCache: LRUCache<string, TileCacheEntry>;
     private modelCache: LRUCache<string, ModelCacheEntry>;
     // Tile template lấy từ style source (tiles[]) hoặc tilejson (url)
@@ -178,15 +177,18 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer {
         }
         this.renderer.clearStencil();
         const zoom = clampZoom(this.minZoom, this.maxZoom, Math.round(this.map.getZoom()));
-        const visibleTiles = this.map.coveringTiles({
-            tileSize: this.tileSize,
-            minzoom: zoom,
-            maxzoom: zoom,
-            roundZoom: true,
-        });
+        const visibleTiles = [];
+        for (let z = this.minZoom; z <= zoom; z++) {
+            const tiles = this.map.coveringTiles({
+                tileSize: this.tileSize,
+                minzoom: z,
+                maxzoom: z,
+                roundZoom: true,
+            });
+            visibleTiles.push(...tiles);
+        }
         // request+cache tiles / models
         const renderTiles = this.ensureTiles(visibleTiles);
-        // v5+: dùng getProjectionData().mainMatrix thay calculatePosMatrix :contentReference[oaicite:4]{index=4}
         const tr = this.map.transform;
         if (!tr?.getProjectionData) {
             return;
@@ -519,7 +521,6 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer {
                 objectScale,
                 scaleUnit,
                 cloneObj3d);
-            cloneObj3d.rotation.y = THREE.MathUtils.degToRad(bearing);
             cloneObj3d.matrixAutoUpdate = false;
             cloneObj3d.updateMatrix();
             cloneObj3d.updateMatrixWorld(true);
