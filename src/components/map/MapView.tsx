@@ -129,6 +129,17 @@ function createDefaultMap(map: maplibregl.Map, overlay_layer: OverlayLayer, outl
         altitude: sunPos.altitude,
         azimuth: sunPos.azimuth,
     }
+
+   /* const customSource = new CustomVectorSource({
+        id: 'map4d source',
+        url: sourceUrl,
+        minZoom: 0,
+        maxZoom: 16,
+        tileSize: 512,
+        maxTileCache: 1024,
+        map: map,
+    });*/
+
     //example layer
     const map4d_layer = new Map4DModelsThreeLayer({
         id: 'test_layer',

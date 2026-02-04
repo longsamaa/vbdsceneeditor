@@ -29,8 +29,6 @@ export type InstanceLayerOpts = {
 export type DataTileInfoForInstanceLayer = {
     sceneTile: THREE.Scene;
 }
-
-
 export class InstanceLayer implements Custom3DTileRenderLayer {
     id: string;
     visible: boolean = true;
@@ -89,9 +87,10 @@ export class InstanceLayer implements Custom3DTileRenderLayer {
         this.renderer = new THREE.WebGLRenderer({
             canvas: map.getCanvas(),
             context: gl,
+            antialias: true,
+            stencil: true,
         });
         this.renderer.autoClear = false;
-        this.renderer.localClippingEnabled = true;
         map.on('click', this.handleClick);
         //load glb file
         this.objectUrls.forEach((url) => {
@@ -139,6 +138,7 @@ export class InstanceLayer implements Custom3DTileRenderLayer {
             const instanceShadowMesh = scene.getObjectByName(`instanceShadowMesh_${key}`) as InstancedMesh;
             if(instanceShadowMesh){
                 const count = instanceShadowMesh.count;
+                console.log(count);
                 for (let i = 0; i < count; ++i) {
                     const scaleUnit: number = instanceMesh.getUserDataAt(i)?.scale_unit as number;
                     if (scaleUnit) {
@@ -372,6 +372,7 @@ export class InstanceLayer implements Custom3DTileRenderLayer {
         if (!this.map || !this.camera || !this.renderer || !this.visible || !this.vectorSource) {
             return;
         }
+        this.renderer.clearStencil();
         const zoom = clampZoom(this.vectorSource.minZoom,
             this.vectorSource.maxZoom,
             Math.round(this.map.getZoom()));

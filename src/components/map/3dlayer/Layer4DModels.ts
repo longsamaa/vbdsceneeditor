@@ -27,6 +27,8 @@ import {
     prepareModelForRender,
 } from '../model/objModel.ts';
 import {MaplibreShadowMesh} from "../shadow/ShadowGeometry.ts";
+import {CustomVectorSource} from "../source/CustomVectorSource.ts"
+
 
 /** Config cho layer */
 export type Map4DModelsLayerOptions = {
@@ -78,6 +80,7 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer {
     private camera: THREE.Camera | null = null;
     private sun: SunParamater | null | undefined;
     private readonly vectorSourceUrl: string;
+    private vectorSource : CustomVectorSource | null = null;
     private readonly sourceLayer: string;
     private readonly rootUrl: string;
     private readonly minZoom: number;
@@ -143,6 +146,20 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer {
                 THREE.MathUtils.degToRad(azimuth)),
             shadow: shadow
         }
+    }
+
+    prerender(): void {
+        if(!this.map || !this.vectorSource) {return;}
+        console.log('vector tile 3d custom render');
+    }
+
+    setVectorSource(source: CustomVectorSource): void {
+        this.vectorSource = source;
+        /*this.vectorSource.onUnloadTile = (tile_key) => {
+            if (this.tileCache.has(tile_key)) {
+                this.tileCache.delete(tile_key);
+            }
+        }*/
     }
 
     onAdd(map: Map, gl: WebGLRenderingContext): void {
