@@ -19,8 +19,18 @@ export class TileFetcher {
             const replace_url = this.buildTileUrl(url,z,x,y);
             this.active++;
             fetch(replace_url)
-                .then(r => r.arrayBuffer())
+                .then(r => {
+                    if (!r.ok) {
+                        this.active--;
+                        throw new Error(`HTTP ${r.status} ${r.statusText}`);
+                    }
+                    return r.arrayBuffer();
+                })
                 .then(cb)
+                .catch(error => {
+                    this.active--;
+                    console.error('Fetch failed:', error);
+                })
                 .finally(() => {
                     this.active--;
                     this.run();

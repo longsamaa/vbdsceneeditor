@@ -17,24 +17,18 @@ import type {
     Custom3DTileRenderLayer
 } from '../Interface.ts';
 import {tileLocalToLatLon, getMetersPerExtentUnit, clampZoom} from '../convert/map_convert.ts';
-import {requestVectorTile} from '../tile/request.ts';
-import {parseVectorTile} from '../convert/vectortile_convert.ts';
-import {parseTileInfo} from '../tile/tile.ts';
-import {createLightGroup, transformModel} from '../model/objModel.ts'
+import {parseLayerTileInfo} from '../tile/tile.ts';
+import {createBuildingGroup, createLightGroup, createShadowGroup, transformModel} from '../model/objModel.ts'
 import {calculateSunDirectionMaplibre} from '../shadow/ShadowHelper.ts'
-import {
-    downloadModel,
-    prepareModelForRender,
-} from '../model/objModel.ts';
 import {MaplibreShadowMesh} from "../shadow/ShadowGeometry.ts";
 import {CustomVectorSource} from "../source/CustomVectorSource.ts"
+import {ModelFetch} from "./ModelFetch.ts";
 
 
 /** Config cho layer */
 export type Map4DModelsLayerOptions = {
     id: string;
     /** id của vector source đã add vào map style (type: "vector") */
-    vectorSourceUrl: string;
     sourceLayer: string;
     /** root để ghép modelUrl/textureUrl từ thuộc tính feature */
     rootUrl: string;
@@ -53,7 +47,7 @@ export type Map4DModelsLayerOptions = {
 };
 
 type TileState = 'preparing' | 'loaded' | 'not-support' | 'error';
-type DownloadState = 'downloading' | 'loaded' | 'disposed';
+type DownloadState = 'downloading' | 'loaded' | 'disposed' | 'error';
 
 type TileCacheEntry = DataTileInfo & {
     state?: TileState;
@@ -63,9 +57,8 @@ type TileCacheEntry = DataTileInfo & {
     objects?: ObjectInfo[];
 };
 
-type ModelCacheEntry = ModelData & {
-    stateDownload?: DownloadState;
-    object3d?: THREE.Group;
+export type ModelCacheEntry = ModelData & {
+    stateDownload : DownloadState;
 };
 
 export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer {
@@ -73,15 +66,15 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer {
     visible = true;
     onPick?: (info: PickHit) => void;
     onPickfail?: () => void;
+    sourceLayer: string;
+    private modelFetcher: ModelFetch = new ModelFetch(8);
     readonly type = 'custom' as const;
     readonly renderingMode = '3d' as const;
     private map: Map | null = null;
     private renderer: THREE.WebGLRenderer | null = null;
     private camera: THREE.Camera | null = null;
     private sun: SunParamater | null | undefined;
-    private readonly vectorSourceUrl: string;
     private vectorSource : CustomVectorSource | null = null;
-    private readonly sourceLayer: string;
     private readonly rootUrl: string;
     private readonly minZoom: number;
     private readonly maxZoom: number;
@@ -95,7 +88,6 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer {
         onPickfail?: () => void
     }) {
         this.id = opts.id;
-        this.vectorSourceUrl = opts.vectorSourceUrl;
         this.sourceLayer = opts.sourceLayer;
         this.rootUrl = opts.rootUrl;
         // this.sun_pos = opts.sun_pos;
@@ -150,7 +142,82 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer {
 
     prerender(): void {
         if(!this.map || !this.vectorSource) {return;}
-        console.log('vector tile 3d custom render');
+        const zoom = clampZoom(
+            this.vectorSource.minZoom,
+            this.vectorSource.maxZoom,
+            Math.round(this.map.getZoom())
+        );
+        const visibleTiles = this.map.coveringTiles({
+            tileSize: this.tileSize,
+            minzoom: zoom,
+            maxzoom: zoom,
+            roundZoom: true,
+        });
+        for (const tile of visibleTiles) {
+            const vectorTile = this.vectorSource.getTile(tile, {
+                build_triangle: true,
+            });
+            const tile_key = this.tileKey(tile);
+            if (vectorTile.state === 'loaded') {
+                const layer = vectorTile.data?.layers[this.sourceLayer];
+                if(!layer){
+                    continue;
+                }
+                let tileDataInfo = this.tileCache.get(tile_key);
+                if(!tileDataInfo){
+                    const scene = new THREE.Scene();
+                    tileDataInfo = {
+                        sceneTile : scene,
+                    }
+                    const dirLight = (this.sun?.sun_dir ?? new THREE.Vector3(0.5, 0.5, 0.5)).clone().normalize();
+                    createLightGroup(scene, dirLight);
+                    createBuildingGroup(scene);
+                    createShadowGroup(scene);
+                    tileDataInfo.objects = parseLayerTileInfo(layer);
+                    this.tileCache.set(tile_key, tileDataInfo);
+                } else {
+                    const objects = tileDataInfo.objects;
+                    if(objects){
+                        //for each va download url, texture
+                        for(const object of objects){
+                            const modelName = object.modelName;
+                            if(modelName){
+                                let modelCacheEntry = this.modelCache.get(modelName);
+                                if(!modelCacheEntry){
+                                    //donwload tile
+                                    modelCacheEntry = {
+                                        stateDownload : 'downloading',
+                                        object3d : null,
+                                        animations : null,
+                                    }
+                                    if(modelName){
+                                        this.modelCache.set(modelName,modelCacheEntry);
+                                    }
+                                    const modelType = object.modelType;
+                                    if(modelType === "Object"){
+                                        let modelUrl = object.modelUrl ?? '';
+                                        let textureUrl = object.textureUrl ?? '';
+                                        if(this.rootUrl){
+                                            modelUrl = this.rootUrl + modelUrl;
+                                            textureUrl = this.rootUrl + textureUrl;
+                                        }
+                                        this.modelFetcher.fetch(modelUrl,textureUrl,modelCacheEntry, (error,obj3d) => {
+                                            if(error){
+                                                console.warn(error);
+                                            }
+                                            if(obj3d){
+                                            }
+                                            this.map?.triggerRepaint();
+                                        });
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    this.populateBuildingGroup(tile,tileDataInfo);
+                }
+            }
+        }
     }
 
     setVectorSource(source: CustomVectorSource): void {
@@ -189,41 +256,36 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer {
     }
 
     render(): void {
-        if (!this.map || !this.camera || !this.renderer || !this.visible) {
+        if (!this.map || !this.camera || !this.renderer || !this.visible || !this.vectorSource) {
             return;
         }
         this.renderer.clearStencil();
-        const zoom = clampZoom(this.minZoom, this.maxZoom, Math.round(this.map.getZoom()));
-        const visibleTiles = [];
-        for (let z = this.minZoom; z <= zoom; z++) {
-            const tiles = this.map.coveringTiles({
-                tileSize: this.tileSize,
-                minzoom: z,
-                maxzoom: z,
-                roundZoom: true,
-            });
-            visibleTiles.push(...tiles);
-        }
-        // request+cache tiles / models
-        const renderTiles = this.ensureTiles(visibleTiles);
+        const zoom = clampZoom(this.vectorSource.minZoom,
+            this.vectorSource.maxZoom,
+            Math.round(this.map.getZoom()));
+        const visibleTiles = this.map.coveringTiles({
+            tileSize: this.tileSize,
+            minzoom: zoom,
+            maxzoom: zoom,
+            roundZoom: true,
+        });
         const tr = this.map.transform;
-        if (!tr?.getProjectionData) {
-            return;
-        }
-        for (const tile of renderTiles) {
-            if (!tile.overScaledTileID || !tile.sceneTile) {
-                continue;
-            }
+        for (const tile of visibleTiles) {
+            const tile_key = this.tileKey(tile);
             const projectionData = tr.getProjectionData({
-                overscaledTileID: tile.overScaledTileID,
+                overscaledTileID: tile,
                 applyGlobeMatrix: this.applyGlobeMatrix,
             });
-            const tileMatrix = projectionData.mainMatrix;
-            this.camera.projectionMatrix = new THREE.Matrix4().fromArray(tileMatrix);
-            this.renderer.resetState();
-            //update shadow geo
-            this.updateShadow(tile.sceneTile);
-            this.renderer.render(tile.sceneTile, this.camera);
+            const tileInfo = this.tileCache.get(tile_key);
+            if(!tileInfo) continue;
+            if(!tileInfo.sceneTile) continue;
+            if (tileInfo) {
+                const tileMatrix = projectionData.mainMatrix;
+                this.camera.projectionMatrix = new THREE.Matrix4().fromArray(tileMatrix);
+                this.updateShadow(tileInfo.sceneTile);
+                this.renderer.resetState();
+                this.renderer.render(tileInfo.sceneTile, this.camera);
+            }
         }
     }
 
@@ -344,167 +406,22 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer {
             }
         });
     }
-
-    private ensureTiles(tiles: OverscaledTileID[]): TileCacheEntry[] {
-        const result: TileCacheEntry[] = [];
-
-        for (const overScaledTileID of tiles) {
-            const key = this.tileKey(overScaledTileID);
-
-            if (!this.tileCache.has(key)) {
-                // tạo entry + kick request
-                const entry: TileCacheEntry = {
-                    state: 'preparing',
-                    stateDownload: 'downloading',
-                };
-                this.tileCache.set(key, entry);
-                this.requestAndParseTile(overScaledTileID, entry).catch((e) => {
-                    entry.state = 'error';
-                    entry.stateDownload = 'loaded';
-                    console.warn('[Map4DModelsThreeLayer] tile error', key, e);
-                });
-                continue;
-            }
-
-            const entry = this.tileCache.get(key);
-            if (!entry) {
-                continue;
-            }
-
-            if (entry.state === 'loaded' && entry.sceneTile && entry.overScaledTileID) {
-                // model download + populate scene
-                this.ensureModels(entry);
-                this.populateScene(entry);
-                // transition như bạn làm (đẩy z về 0 dần)
-                /*this.applyTransition(entry);*/
-                // chỉ render khi tile ready
-                if (entry.sceneTile.children.length > 0) {
-                    result.push(entry);
-                }
-            }
-        }
-
-        return result;
-    }
-
-    private createShadowGroup(scene: THREE.Scene): void {
-        const shadow_group: THREE.Group = new THREE.Group();
-        shadow_group.name = "group";
-        scene.add(shadow_group);
-    }
-
-    private async requestAndParseTile(overScaledTileID: OverscaledTileID, entry: TileCacheEntry) {
-        const c = overScaledTileID.canonical;
-
-        // Dùng requestVectorTile của bạn, nhưng URL lấy từ source "gốc"
-        const tileUrl = this.buildTileUrl(c.z, c.x, c.y);
-        const buffer = await requestVectorTile(c.z, c.x, c.y, tileUrl);
-
-        if (entry.stateDownload === 'disposed') {
-            return;
-        }
-        //console.log(this.map?.style.tileManagers['map4d']._inViewTiles.getAllTiles());
-        /*for(const t of this.map?.style.tileManagers['map4d'].){
-            console.log(t.latestFeatureIndex);
-        }*/
-        const parsed = parseVectorTile(buffer);
-        const hasLayer = Object.prototype.hasOwnProperty.call(parsed.layers, this.sourceLayer);
-        if (!hasLayer) {
-            entry.state = 'not-support';
-            entry.stateDownload = 'loaded';
-            return;
-        }
-        const objects: ObjectInfo[] = parseTileInfo(parsed, this.sourceLayer);
-        entry.objects = objects;
-        entry.overScaledTileID = overScaledTileID;
-        entry.sceneTile = new THREE.Scene();
-        const dirLight = (this.sun?.sun_dir ?? new THREE.Vector3(0.5,0.5,0.5)).clone().normalize();
-        createLightGroup(entry.sceneTile, dirLight);
-        if (this.sun) {
-            this.createShadowGroup(entry.sceneTile);
-        }
-        entry.state = 'loaded';
-        entry.stateDownload = 'loaded';
-    }
-
-    /** --------- Model management --------- */
-
-    private ensureModels(tile: TileCacheEntry) {
-        if (!tile.objects) {
-            return;
-        }
-        for (const object of tile.objects) {
-            const modelName = object.modelName as string;
-            if (!modelName) {
-                continue;
-            }
-            if (this.modelCache.has(modelName)) {
-                continue;
-            }
-            const model: ModelCacheEntry = {
-                stateDownload: 'downloading',
-                object3d: new THREE.Group(),
-                animations: [],
-            };
-            this.modelCache.set(modelName, model);
-            const modelUrl = this.rootUrl + (object.modelUrl as string);
-            //const isGlb = isGlbModel(modelUrl);
-            const textureUrl = this.rootUrl + (object.textureUrl as string);
-            downloadModel(modelUrl)
-                .then(async (obj3d) => {
-                    if (model.stateDownload === 'disposed') {
-                        return;
-                    }
-                    prepareModelForRender(obj3d as THREE.Object3D);
-                    obj3d.matrixAutoUpdate = false;
-                    model.object3d = obj3d;
-                    const textureLoader = new THREE.TextureLoader();
-                    try {
-                        const texture = await textureLoader.loadAsync(textureUrl).catch((err) => {
-                            throw err;
-                        });
-                        obj3d.traverse((child) => {
-                            if (child instanceof THREE.Mesh) {
-                                const mat = child.material;
-                                if (mat) {
-                                    mat.map = texture;
-                                    mat.needsUpdate = true;
-                                }
-                            }
-                        });
-                        this.map?.triggerRepaint();
-                    } catch (err) {
-                        // nếu fail texture thì add edges
-                        obj3d.traverse((child) => {
-                            if (child instanceof THREE.Mesh) {
-                                const edges = new THREE.EdgesGeometry(child.geometry);
-                                const edgeMaterial = new THREE.LineBasicMaterial({color: 0x000000});
-                                const edgeLines = new THREE.LineSegments(edges, edgeMaterial);
-                                child.add(edgeLines);
-                            }
-                        });
-                        this.map?.triggerRepaint();
-                    }
-                    model.stateDownload = 'loaded';
-                })
-                .catch((e) => {
-                    model.stateDownload = 'loaded';
-                    console.warn('[Map4DModelsThreeLayer] = failed:', e);
-                });
-        }
-    }
-
-    private populateScene(tile: TileCacheEntry) {
-        if (!tile.sceneTile || !tile.objects || !tile.overScaledTileID) {
+    private populateBuildingGroup(overScaledTile : OverscaledTileID ,tile: TileCacheEntry) {
+        if (!tile.sceneTile || !tile.objects || !overScaledTile) {
             return;
         }
         // chỉ add khi chưa đủ
-        if (tile.sceneTile.children.length === tile.objects.length) {
+        const building_group = tile.sceneTile.getObjectByName('building_group');
+        const shadow_group = tile.sceneTile.getObjectByName('shadow_group');
+        if(!building_group) return;
+        if (building_group.children.length === tile.objects.length) {
             return;
         }
-        const z = tile.overScaledTileID.canonical.z;
-        const tileX = tile.overScaledTileID.canonical.x;
-        const tileY = tile.overScaledTileID.canonical.y;
+
+        const z = overScaledTile.canonical.z;
+        const tileX = overScaledTile.canonical.x;
+        const tileY = overScaledTile.canonical.y;
+
         for (const object of tile.objects) {
             const modelName = object.modelName as string;
             const modelId = object.id as string;
@@ -549,7 +466,6 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer {
                 scaleUnit,
                 isModelRoot: true,
             };
-            const main_scene = tile.sceneTile;
             cloneObj3d.traverse((child) => {
                 if (child instanceof THREE.Mesh) {
                     const object_shadow = new MaplibreShadowMesh(child);
@@ -557,23 +473,11 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer {
                         scale_unit: scaleUnit,
                     };
                     object_shadow.matrixAutoUpdate = false;
-                    main_scene.add(object_shadow);
+                    shadow_group?.add(object_shadow);
                 }
             });
-            main_scene.add(cloneObj3d);
+            building_group.add(cloneObj3d);
             this.map?.triggerRepaint();
         }
-    }
-
-    /** --------- Read vector source "gốc" to get tile templates --------- */
-    private buildTileUrl(z: number, x: number, y: number): string {
-        // thay token chuẩn {z}/{x}/{y}
-        let url = this.vectorSourceUrl
-            .replace('{z}', String(z))
-            .replace('{x}', String(x))
-            .replace('{y}', String(y));
-        // nếu template dùng {ratio} hoặc {r} thì strip (tuỳ server)
-        url = url.replace('{ratio}', '1').replace('{r}', '');
-        return url;
     }
 }

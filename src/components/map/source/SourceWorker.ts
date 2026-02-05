@@ -27,4 +27,3 @@ self.onmessage = (event: MessageEvent<WorkerInput>) => {
     };
     self.postMessage(output);
 };
-

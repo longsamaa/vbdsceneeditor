@@ -1,7 +1,7 @@
 import {type CustomSource} from './SourceInterface'
 import {LRUCache} from 'lru-cache';
 import {TileFetcher} from './TileFetcher'
-import type {WorkerOutput} from './Worker.ts'
+import type {WorkerOutput} from './SourceWorker.ts'
 import type {JsonVectorTile} from './GeojsonConverter.ts'
 type CustomVectorTileState = 'preparing' | 'loaded' | 'error' | 'disposed';
 type CustomVectorTileData = {
@@ -57,7 +57,7 @@ export class CustomVectorSource implements CustomSource {
         this.setupWorkerListeners();
     }
     private setupWorkerListeners() : void {
-       this.worker = new Worker(new URL('./Worker.ts', import.meta.url), {type: 'module'})
+       this.worker = new Worker(new URL('./SourceWorker.ts', import.meta.url), {type: 'module'})
         this.worker.onmessage = (e: MessageEvent<WorkerOutput>) => {
            const {result,tile_key} = e.data;
            const tile = this.tileCache.get(tile_key);

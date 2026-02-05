@@ -29,11 +29,11 @@ export interface ObjectInfo {
     modelUrl?: string;
     mixer: THREE.AnimationMixer | null;
     actions: THREE.AnimationAction[] | null;
-    animations: THREE.AnimationClip[];
+    animations: THREE.AnimationClip[] | null;
 }
 export interface ModelData {
-    object3d?: THREE.Object3D;
-    animations: THREE.AnimationClip[];
+    object3d?: THREE.Object3D | null;
+    animations: THREE.AnimationClip[] | null;
 }
 export interface DataTileInfo {
     objects?: Array<ObjectInfo>;

@@ -17,7 +17,6 @@ import {CustomVectorSource} from "../source/CustomVectorSource.ts"
 import {buildShadowMatrix, calculateSunDirectionMaplibre} from "../shadow/ShadowHelper.ts";
 import InstancedGroupMesh from "./InstancedGroupMesh.ts";
 import {InstancedMesh} from "three";
-
 export type InstanceLayerOpts = {
     id: string;
     applyGlobeMatrix: boolean;
@@ -138,7 +137,6 @@ export class InstanceLayer implements Custom3DTileRenderLayer {
             const instanceShadowMesh = scene.getObjectByName(`instanceShadowMesh_${key}`) as InstancedMesh;
             if(instanceShadowMesh){
                 const count = instanceShadowMesh.count;
-                console.log(count);
                 for (let i = 0; i < count; ++i) {
                     const scaleUnit: number = instanceMesh.getUserDataAt(i)?.scale_unit as number;
                     if (scaleUnit) {

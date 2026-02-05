@@ -132,7 +132,7 @@ export function reverseFaceWinding(geometry: THREE.BufferGeometry): void {
 export function prepareModelForRender(model: THREE.Object3D, setDefaultMat: boolean = true): void {
     model.matrixAutoUpdate = false;
     // convert y up to z up
-    const default_mat = new THREE.MeshLambertMaterial({color: 0xC0C0C0, side: THREE.DoubleSide});
+    const default_mat = new THREE.MeshLambertMaterial({color: 0xC0C0C0, side: THREE.FrontSide});
     default_mat.polygonOffset = true;
     default_mat.polygonOffsetFactor = -1;
     default_mat.polygonOffsetUnits  = -1;
@@ -264,6 +264,17 @@ export function createLightGroup(scene: THREE.Scene, dir: THREE.Vector3): void {
     ambientLight.color.setHSL(0.15, 0.2, 1);
     light_group.add(ambientLight);
     scene.add(light_group);
+}
+export function createBuildingGroup(scene: THREE.Scene){
+    const building_group = new THREE.Group();
+    building_group.name = 'building_group';
+    scene.add(building_group);
+}
+
+export function createShadowGroup(scene: THREE.Scene): void {
+    const shadow_group = new THREE.Group();
+    shadow_group.name = "shadow_group";
+    scene.add(shadow_group);
 }
 
 export function objectEnableClippingPlaneZ(object: THREE.Object3D, enable: boolean): void {

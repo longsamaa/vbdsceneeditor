@@ -5,7 +5,7 @@ import type {WebGLContextAttributesWithType} from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css';
 import './MapView.css'
 import {type EditableLayer, LayerEditControl} from '../toolbar/LayerEditCtrl'
-import {Map4DModelsThreeLayer} from './3dlayer/Layer4DModels.ts'
+import {Map4DModelsThreeLayer} from './3dlayer/ThreeDLayer.ts'
 import {OverlayLayer} from './gizmo/OverlayLayer'
 import {getSunPosition} from './shadow/ShadowHelper.ts'
 import OutlineLayer from './gizmo/OutlineLayer.ts'
@@ -130,15 +130,15 @@ function createDefaultMap(map: maplibregl.Map, overlay_layer: OverlayLayer, outl
         azimuth: sunPos.azimuth,
     }
 
-   /* const customSource = new CustomVectorSource({
+    const map4dSource = new CustomVectorSource({
         id: 'map4d source',
-        url: sourceUrl,
+        url: vectorSourceUrl,
         minZoom: 0,
-        maxZoom: 16,
+        maxZoom: 18,
         tileSize: 512,
         maxTileCache: 1024,
         map: map,
-    });*/
+    });
 
     //example layer
     const map4d_layer = new Map4DModelsThreeLayer({
@@ -162,6 +162,7 @@ function createDefaultMap(map: maplibregl.Map, overlay_layer: OverlayLayer, outl
         }
     });
     map4d_layer.setSunPos(sunPos.altitude, sunPos.azimuth);
+    map4d_layer.setVectorSource(map4dSource);
     map.addLayer(map4d_layer);
     //create source
     const sourceUrl = 'https://images.daklak.gov.vn/v2/tile/{z}/{x}/{y}/306ec9b5-8146-4a83-9271-bd7b343a574a';
@@ -187,7 +188,7 @@ function createDefaultMap(map: maplibregl.Map, overlay_layer: OverlayLayer, outl
         'fill-vnairport-index'
     );
     //create instance layer
-    const instanceCustomSouce = new CustomVectorSource({
+    const instanceCustomSource = new CustomVectorSource({
         id: 'test-custom-source',
         url: 'http://10.222.3.81:8083/VietbandoMapService/api/image/?Function=GetVectorTile&MapName=IndoorNavigation&Level={z}&TileX={x}&TileY={y}&UseTileCache=true',
         minZoom: 0,
@@ -208,7 +209,7 @@ function createDefaultMap(map: maplibregl.Map, overlay_layer: OverlayLayer, outl
             '/test_data/test_instance/tree5.glb',
             '/test_data/test_instance/tree6.glb']
     });
-    instance_layer.setVectorSource(instanceCustomSouce);
+    instance_layer.setVectorSource(instanceCustomSource);
     map.addLayer(instance_layer);
 }
 
