@@ -1,22 +1,18 @@
 /* eslint-disable @typescript-eslint/prefer-as-const */
-import {
-    Map,
-    OverscaledTileID,
-    MapMouseEvent
-} from 'maplibre-gl';
+import {Map, MapMouseEvent, OverscaledTileID} from 'maplibre-gl';
 import * as THREE from 'three';
 import {LRUCache} from 'lru-cache';
 import type {
+    Custom3DTileRenderLayer,
     DataTileInfo,
-    ObjectInfo,
-    ModelData,
     LatLon,
-    SunOptions,
-    SunParamater,
+    ModelData,
+    ObjectInfo,
     PickHit,
-    Custom3DTileRenderLayer
+    SunOptions,
+    SunParamater
 } from '../Interface.ts';
-import {tileLocalToLatLon, getMetersPerExtentUnit, clampZoom} from '../convert/map_convert.ts';
+import {clampZoom, getMetersPerExtentUnit, tileLocalToLatLon} from '../convert/map_convert.ts';
 import {parseLayerTileInfo} from '../tile/tile.ts';
 import {createBuildingGroup, createLightGroup, createShadowGroup, transformModel} from '../model/objModel.ts'
 import {calculateSunDirectionMaplibre} from '../shadow/ShadowHelper.ts'
@@ -322,12 +318,12 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer {
         for (const tid of visibleTiles) {
             const key = this.tileKey(tid);
             const tile = this.tileCache.get(key);
-            if (!tile?.sceneTile || !tile.overScaledTileID) {
+            if (!tile?.sceneTile) {
                 continue;
             }
 
             const proj = tr.getProjectionData({
-                overscaledTileID: tile.overScaledTileID,
+                overscaledTileID: tid,
                 applyGlobeMatrix: this.applyGlobeMatrix,
             });
 
