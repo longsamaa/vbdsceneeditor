@@ -1,7 +1,7 @@
 // MapView.tsx
-import React, {useEffect, useRef, forwardRef, useImperativeHandle, useState} from 'react';
-import maplibregl from 'maplibre-gl';
+import React, {forwardRef, useEffect, useImperativeHandle, useRef, useState} from 'react';
 import type {WebGLContextAttributesWithType} from 'maplibre-gl'
+import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import './MapView.css'
 import {type EditableLayer, LayerEditControl} from '../toolbar/LayerEditCtrl'
@@ -11,7 +11,7 @@ import {getSunPosition} from './shadow/ShadowHelper.ts'
 import OutlineLayer from './gizmo/OutlineLayer.ts'
 import type {TransformMode} from '../toolbar/TransformToolbar'
 import {loadModelFromGlb} from './model/objModel.ts'
-import {EditLayer} from "./EditLayer.ts";
+import {EditLayer} from "./edit/EditLayer.ts";
 import type {Custom3DTileRenderLayer} from "./Interface.ts";
 import {CustomEditLayerManager} from "./CustomEditLayerManager.ts"
 import {WaterLayer} from "./water/WaterLayer.ts"
@@ -104,7 +104,8 @@ function addEditorLayerToMap(
                     id: path,
                     modeldata
                 }]);
-                new_editor_layer.addObjectToScene(path, 10);
+                const center = map.getCenter();
+                new_editor_layer.addObjectToScene(path, center.lat, center.lng, 10);
             })
             .catch((e) => {
                 console.error('Load GLB failed:', path, e);
@@ -143,7 +144,6 @@ function createDefaultMap(map: maplibregl.Map, overlay_layer: OverlayLayer, outl
     //example layer
     const map4d_layer = new Map4DModelsThreeLayer({
         id: 'test_layer',
-        vectorSourceUrl: vectorSourceUrl,
         sourceLayer: sourceLayer,
         rootUrl: rootModelUrl,
         minZoom: 16,
@@ -208,6 +208,14 @@ function createDefaultMap(map: maplibregl.Map, overlay_layer: OverlayLayer, outl
             '/test_data/test_instance/tree4.glb',
             '/test_data/test_instance/tree5.glb',
             '/test_data/test_instance/tree6.glb']
+    });
+    instance_layer.setLightOption({
+        directional: {
+            intensity: 2.0
+        },
+        hemisphere: {
+            intensity: 1.5
+        }
     });
     instance_layer.setVectorSource(instanceCustomSource);
     map.addLayer(instance_layer);

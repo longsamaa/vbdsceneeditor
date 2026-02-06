@@ -3,14 +3,13 @@ import {LRUCache} from 'lru-cache';
 import {TileFetcher} from './TileFetcher'
 import type {WorkerOutput} from './SourceWorker.ts'
 import type {JsonVectorTile} from './GeojsonConverter.ts'
+import maplibregl, {OverscaledTileID,} from 'maplibre-gl';
+
 type CustomVectorTileState = 'preparing' | 'loaded' | 'error' | 'disposed';
 type CustomVectorTileData = {
     data: JsonVectorTile | null;
     state: CustomVectorTileState;
 }
-import maplibregl, {
-    OverscaledTileID,
-} from 'maplibre-gl';
 
 export type CustomVectorSourceOpts = {
     id: string,
@@ -35,7 +34,7 @@ export class CustomVectorSource implements CustomSource {
     tileSize: number = 512;
     map: maplibregl.Map | null = null;
     tileFetcher: TileFetcher = new TileFetcher(8);
-    onUnloadTile : (tile_key : string) => void;
+    private onUnloadTile: Array<(tile_key: string) => void> = [];
     private worker: Worker | null = null;
     private tileCache: LRUCache<string, CustomVectorTileData>;
     constructor(opts: CustomVectorSourceOpts) {
@@ -72,8 +71,19 @@ export class CustomVectorSource implements CustomSource {
         const c = tile.canonical;
         return `${c.z}/${c.x}/${c.y}`;
     }
+
+    registerUnLoadTile(func: (tile_key: string) => void) {
+        if (func) {
+            this.onUnloadTile.push(func);
+        }
+    }
+
     private unloadTile(tile_key : string) {
-        this.onUnloadTile?.(tile_key);
+        this.onUnloadTile.forEach((func) => {
+            if (func) {
+                func(tile_key);
+            }
+        });
     }
     getTile(tile: OverscaledTileID, opts : GetTileOptions): CustomVectorTileData {
         const string_key = this.tileKey(tile);

@@ -1,4 +1,3 @@
-import {VectorTile} from '@mapbox/vector-tile';
 import type {ObjectInfo} from "../Interface.ts"
 import type {JsonVectorTileLayer} from "../source/GeojsonConverter.ts";
 
@@ -42,6 +41,7 @@ export function parseLayerTileInfo(layer: JsonVectorTileLayer): Array<ObjectInfo
     return lstObject3d;
 }
 
+/*
 export function parseTileInfo(tile: VectorTile, sourceLayer: string): Array<ObjectInfo> {
     const layer = tile.layers[sourceLayer];
     const extent = layer.extent;
@@ -66,6 +66,8 @@ export function parseTileInfo(tile: VectorTile, sourceLayer: string): Array<Obje
         object3d.textureName = properties.texturename as string;
         object3d.textureUrl = properties.textureurl as string;
         object3d.scale = properties.scale as number;
+        object3d.mixer = null;
+        obj
         // Only push if all required properties exist
         if (object3d.modelName && object3d.modelUrl && object3d.modelType &&
             object3d.textureName && object3d.textureUrl) {
@@ -73,4 +75,4 @@ export function parseTileInfo(tile: VectorTile, sourceLayer: string): Array<Obje
         }
     }
     return lstObject3d;
-}
+}*/

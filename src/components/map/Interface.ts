@@ -1,8 +1,7 @@
 import * as THREE from 'three'
+import type {CustomLayerInterface} from 'maplibre-gl';
 import {OverscaledTileID} from 'maplibre-gl';
-import type {
-    CustomLayerInterface
-} from 'maplibre-gl';
+
 export interface LocalCoordinate {
     tileX: number,
     tileY: number,
@@ -72,6 +71,31 @@ export type UserData = {
 export type ShadowUserData = {
     scale_unit : number
 }
+
+export type LightGroupOption = {
+    directional?: {
+        intensity?: number;
+        color?: THREE.ColorRepresentation;
+        direction?: THREE.Vector3;
+    };
+    hemisphere?: {
+        intensity?: number;
+        skyColor?: THREE.ColorRepresentation;
+        groundColor?: THREE.ColorRepresentation;
+    };
+    ambient?: {
+        intensity?: number;
+        color?: THREE.ColorRepresentation;
+    };
+};
+
+export type LightGroup = THREE.Group & {
+    dirLight: THREE.DirectionalLight;
+    hemiLight: THREE.HemisphereLight;
+    ambientLight: THREE.AmbientLight;
+};
+
+
 export type Custom3DTileRenderLayer = CustomLayerInterface & {
     visible : boolean,
     onPick?: (info: PickHit) => void,

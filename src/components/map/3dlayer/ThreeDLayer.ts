@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/prefer-as-const */
 import {Map, MapMouseEvent, OverscaledTileID} from 'maplibre-gl';
 import * as THREE from 'three';
 import {LRUCache} from 'lru-cache';
@@ -6,6 +5,8 @@ import type {
     Custom3DTileRenderLayer,
     DataTileInfo,
     LatLon,
+    LightGroup,
+    LightGroupOption,
     ModelData,
     ObjectInfo,
     PickHit,
@@ -51,10 +52,11 @@ type TileCacheEntry = DataTileInfo & {
     sceneTile?: THREE.Scene;
     overScaledTileID?: OverscaledTileID;
     objects?: ObjectInfo[];
+    isFullObject: boolean;
 };
 
 export type ModelCacheEntry = ModelData & {
-    stateDownload : DownloadState;
+    stateDownload: DownloadState;
 };
 
 export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer {
@@ -66,11 +68,13 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer {
     private modelFetcher: ModelFetch = new ModelFetch(8);
     readonly type = 'custom' as const;
     readonly renderingMode = '3d' as const;
+    private light: LightGroup | null = null;
+    private currentScene: THREE.Scene | null = null;
     private map: Map | null = null;
     private renderer: THREE.WebGLRenderer | null = null;
     private camera: THREE.Camera | null = null;
     private sun: SunParamater | null | undefined;
-    private vectorSource : CustomVectorSource | null = null;
+    private vectorSource: CustomVectorSource | null = null;
     private readonly rootUrl: string;
     private readonly minZoom: number;
     private readonly maxZoom: number;
@@ -78,15 +82,14 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer {
     private readonly applyGlobeMatrix: boolean;
     private tileCache: LRUCache<string, TileCacheEntry>;
     private modelCache: LRUCache<string, ModelCacheEntry>;
-    // Tile template lấy từ style source (tiles[]) hoặc tilejson (url)
     private raycaster = new THREE.Raycaster();
+
     constructor(opts: Map4DModelsLayerOptions & { onPick?: (info: PickHit) => void } & {
         onPickfail?: () => void
     }) {
         this.id = opts.id;
         this.sourceLayer = opts.sourceLayer;
         this.rootUrl = opts.rootUrl;
-        // this.sun_pos = opts.sun_pos;
         this.minZoom = opts.minZoom ?? 16;
         this.maxZoom = opts.maxZoom ?? 19;
         this.tileSize = opts.tileSize ?? 512;
@@ -99,6 +102,10 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer {
                     THREE.MathUtils.degToRad(opts.sun.azimuth)),
                 shadow: opts.sun.shadow
             }
+        }
+        const dirLight = (this.sun?.sun_dir ?? new THREE.Vector3(0.5, 0.5, 0.5)).clone().normalize();
+        if (this.sun) {
+            this.light = createLightGroup(dirLight);
         }
         this.modelCache = new LRUCache<string, ModelCacheEntry>({
             max: opts.maxModelCache ?? 1024,
@@ -137,7 +144,9 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer {
     }
 
     prerender(): void {
-        if(!this.map || !this.vectorSource) {return;}
+        if (!this.map || !this.vectorSource) {
+            return;
+        }
         const zoom = clampZoom(
             this.vectorSource.minZoom,
             this.vectorSource.maxZoom,
@@ -156,52 +165,51 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer {
             const tile_key = this.tileKey(tile);
             if (vectorTile.state === 'loaded') {
                 const layer = vectorTile.data?.layers[this.sourceLayer];
-                if(!layer){
+                if (!layer) {
                     continue;
                 }
                 let tileDataInfo = this.tileCache.get(tile_key);
-                if(!tileDataInfo){
+                if (!tileDataInfo) {
                     const scene = new THREE.Scene();
                     tileDataInfo = {
-                        sceneTile : scene,
+                        sceneTile: scene,
+                        isFullObject: false,
                     }
-                    const dirLight = (this.sun?.sun_dir ?? new THREE.Vector3(0.5, 0.5, 0.5)).clone().normalize();
-                    createLightGroup(scene, dirLight);
                     createBuildingGroup(scene);
                     createShadowGroup(scene);
                     tileDataInfo.objects = parseLayerTileInfo(layer);
                     this.tileCache.set(tile_key, tileDataInfo);
                 } else {
                     const objects = tileDataInfo.objects;
-                    if(objects){
+                    if (objects) {
                         //for each va download url, texture
-                        for(const object of objects){
+                        for (const object of objects) {
                             const modelName = object.modelName;
-                            if(modelName){
+                            if (modelName) {
                                 let modelCacheEntry = this.modelCache.get(modelName);
-                                if(!modelCacheEntry){
+                                if (!modelCacheEntry) {
                                     //donwload tile
                                     modelCacheEntry = {
-                                        stateDownload : 'downloading',
-                                        object3d : null,
-                                        animations : null,
+                                        stateDownload: 'downloading',
+                                        object3d: null,
+                                        animations: null,
                                     }
-                                    if(modelName){
-                                        this.modelCache.set(modelName,modelCacheEntry);
+                                    if (modelName) {
+                                        this.modelCache.set(modelName, modelCacheEntry);
                                     }
                                     const modelType = object.modelType;
-                                    if(modelType === "Object"){
+                                    if (modelType === "Object") {
                                         let modelUrl = object.modelUrl ?? '';
                                         let textureUrl = object.textureUrl ?? '';
-                                        if(this.rootUrl){
+                                        if (this.rootUrl) {
                                             modelUrl = this.rootUrl + modelUrl;
                                             textureUrl = this.rootUrl + textureUrl;
                                         }
-                                        this.modelFetcher.fetch(modelUrl,textureUrl,modelCacheEntry, (error,obj3d) => {
-                                            if(error){
+                                        this.modelFetcher.fetch(modelUrl, textureUrl, modelCacheEntry, (error, obj3d) => {
+                                            if (error) {
                                                 console.warn(error);
                                             }
-                                            if(obj3d){
+                                            if (obj3d) {
                                             }
                                             this.map?.triggerRepaint();
                                         });
@@ -210,7 +218,7 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer {
                             }
                         }
                     }
-                    this.populateBuildingGroup(tile,tileDataInfo);
+                    this.populateBuildingGroup(tile, tileDataInfo);
                 }
             }
         }
@@ -218,11 +226,12 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer {
 
     setVectorSource(source: CustomVectorSource): void {
         this.vectorSource = source;
-        /*this.vectorSource.onUnloadTile = (tile_key) => {
+        this.vectorSource.registerUnLoadTile((tile_key: string) => {
             if (this.tileCache.has(tile_key)) {
+                console.log('delete tile key');
                 this.tileCache.delete(tile_key);
             }
-        }*/
+        });
     }
 
     onAdd(map: Map, gl: WebGLRenderingContext): void {
@@ -241,6 +250,38 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer {
         map.on('click', this.handleClick);
     }
 
+    setLightOption(option: LightGroupOption) {
+        if (!this.light) return;
+        const {directional, hemisphere, ambient} = option;
+        if (directional) {
+            const l = this.light.dirLight;
+            if (directional.intensity !== undefined)
+                l.intensity = directional.intensity;
+            if (directional.color !== undefined)
+                l.color.set(directional.color);
+            if (directional.direction !== undefined)
+                l.target.position.copy(
+                    directional.direction.clone().multiplyScalar(10000)
+                );
+        }
+        if (hemisphere) {
+            const l = this.light.hemiLight;
+            if (hemisphere.intensity !== undefined)
+                l.intensity = hemisphere.intensity;
+            if (hemisphere.skyColor !== undefined)
+                l.color.set(hemisphere.skyColor);
+            if (hemisphere.groundColor !== undefined)
+                l.groundColor.set(hemisphere.groundColor);
+        }
+        if (ambient) {
+            const l = this.light.ambientLight;
+            if (ambient.intensity !== undefined)
+                l.intensity = ambient.intensity;
+            if (ambient.color !== undefined)
+                l.color.set(ambient.color);
+        }
+    }
+
     onRemove(): void {
         this.map?.off('click', this.handleClick);
         this.renderer?.dispose();
@@ -252,7 +293,7 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer {
     }
 
     render(): void {
-        if (!this.map || !this.camera || !this.renderer || !this.visible || !this.vectorSource) {
+        if (!this.map || !this.camera || !this.renderer || !this.visible || !this.vectorSource || !this.light) {
             return;
         }
         this.renderer.clearStencil();
@@ -273,11 +314,18 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer {
                 applyGlobeMatrix: this.applyGlobeMatrix,
             });
             const tileInfo = this.tileCache.get(tile_key);
-            if(!tileInfo) continue;
-            if(!tileInfo.sceneTile) continue;
+            if (!tileInfo) continue;
+            if (!tileInfo.sceneTile) continue;
             if (tileInfo) {
                 const tileMatrix = projectionData.mainMatrix;
                 this.camera.projectionMatrix = new THREE.Matrix4().fromArray(tileMatrix);
+                if (this.currentScene != tileInfo.sceneTile) {
+                    if (this.currentScene) {
+                        this.currentScene.remove(this.light);
+                    }
+                    tileInfo.sceneTile.add(this.light);
+                    this.currentScene = tileInfo.sceneTile;
+                }
                 this.updateShadow(tileInfo.sceneTile);
                 this.renderer.resetState();
                 this.renderer.render(tileInfo.sceneTile, this.camera);
@@ -398,22 +446,24 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer {
         scene.traverse((child) => {
             if (child instanceof MaplibreShadowMesh) {
                 const shadow_scale_z = child.userData.scale_unit;
-                (child as MaplibreShadowMesh).update(new THREE.Vector3(sun_dir.x, sun_dir.y, -sun_dir.z / shadow_scale_z));
+                //(child as MaplibreShadowMesh).update(new THREE.Vector3(sun_dir.x, sun_dir.y, -sun_dir.z / shadow_scale_z));
+                (child as MaplibreShadowMesh).update(sun_dir.x, sun_dir.y, -sun_dir.z / shadow_scale_z);
             }
         });
     }
-    private populateBuildingGroup(overScaledTile : OverscaledTileID ,tile: TileCacheEntry) {
-        if (!tile.sceneTile || !tile.objects || !overScaledTile) {
+
+    private populateBuildingGroup(overScaledTile: OverscaledTileID, tile: TileCacheEntry) {
+        if (!tile.sceneTile || !tile.objects || !overScaledTile || tile.isFullObject) {
             return;
         }
         // chỉ add khi chưa đủ
         const building_group = tile.sceneTile.getObjectByName('building_group');
-        const shadow_group = tile.sceneTile.getObjectByName('shadow_group');
-        if(!building_group) return;
+        if (!building_group) return;
         if (building_group.children.length === tile.objects.length) {
+            tile.isFullObject = true;
             return;
         }
-
+        const shadow_group = tile.sceneTile.getObjectByName('shadow_group');
         const z = overScaledTile.canonical.z;
         const tileX = overScaledTile.canonical.x;
         const tileY = overScaledTile.canonical.y;

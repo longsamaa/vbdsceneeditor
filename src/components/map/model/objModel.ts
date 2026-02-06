@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import {OBJLoader} from 'three/examples/jsm/loaders/OBJLoader.js';
-import type {ModelData} from '../Interface.ts'
+import type {LightGroup, ModelData} from '../Interface.ts'
 import {tileLocalToLatLon} from '../convert/map_convert'
 import {GLTFLoader} from 'three/examples/jsm/loaders/GLTFLoader.js';
 
@@ -230,41 +230,29 @@ export function decomposeObject(model: THREE.Object3D) {
 }
 
 /*CREATE LIGHT GROUP DIRECTION LIGHT, HEMILIGHT*/
-export function createLightGroup(scene: THREE.Scene, dir: THREE.Vector3): void {
-    const light_group = new THREE.Group();
-    light_group.name = 'light_group';
-    // Directional Light - Ánh nắng mặt trời buổi sáng
-    const dirLight = new THREE.DirectionalLight(0xffffff, 2);
+
+export function createLightGroup(dir: THREE.Vector3): LightGroup {
+    const group = new THREE.Group() as LightGroup;
+    group.name = 'light_group';
+    const dirLight = new THREE.DirectionalLight(0xffffff, 5);
     dirLight.name = 'dir_light';
-    dirLight.color.setHSL(
-        0.12,
-        0.7,
-        0.98
-    );
+    dirLight.color.setHSL(0.12, 0.7, 0.98);
     dirLight.target.position.copy(dir.clone().multiplyScalar(10000));
-    light_group.add(dirLight);
-    light_group.add(dirLight.target);
-    // Hemisphere Light - Ánh sáng tán xạ từ bầu trời
     const hemiLight = new THREE.HemisphereLight(0xffffff, 0xffffff, 2.5);
     hemiLight.name = 'hemi_light';
-    hemiLight.color.setHSL(
-        0.55,
-        0.4,
-        0.95
-    );
-    hemiLight.groundColor.setHSL(
-        0.08,
-        0.25,
-        0.6
-    );
-    hemiLight.position.set(0, 0, 1);
-    light_group.add(hemiLight);
-
-    const ambientLight = new THREE.AmbientLight(0xffffff, 1.2);
+    hemiLight.color.setHSL(0.55, 0.4, 0.95);
+    hemiLight.groundColor.setHSL(0.08, 0.25, 0.6);
+    hemiLight.position.set(0, 0, -1);
+    const ambientLight = new THREE.AmbientLight(0xffffff, 1);
     ambientLight.color.setHSL(0.15, 0.2, 1);
-    light_group.add(ambientLight);
-    scene.add(light_group);
+    group.dirLight = dirLight;
+    group.hemiLight = hemiLight;
+    group.ambientLight = ambientLight;
+    group.add(dirLight, dirLight.target, hemiLight, ambientLight);
+    return group;
 }
+
+
 export function createBuildingGroup(scene: THREE.Scene){
     const building_group = new THREE.Group();
     building_group.name = 'building_group';

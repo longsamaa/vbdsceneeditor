@@ -51,7 +51,7 @@ export class ModelFetch {
                         if(!(textureUrl.length === 0)){
                             const textureLoader = new THREE.TextureLoader();
                             const texture = await textureLoader.loadAsync(textureUrl).catch((err) => {
-                                throw err;
+                                console.warn(err);
                             });
                             if(texture){
                                 obj3d.traverse((child) => {

@@ -1,22 +1,21 @@
-import maplibregl, {
-    MapMouseEvent,
-} from 'maplibre-gl';
-import {
-    bakeWorldAndConvertYupToZup,
-    createLightGroup, loadModelFromGlb,
-} from '../model/objModel.ts';
-import {clampZoom, tileLocalToLatLon, getMetersPerExtentUnit} from '../convert/map_convert.ts';
+import maplibregl, {MapMouseEvent,} from 'maplibre-gl';
+import {bakeWorldAndConvertYupToZup, createLightGroup, loadModelFromGlb,} from '../model/objModel.ts';
+import {clampZoom, getMetersPerExtentUnit, tileLocalToLatLon} from '../convert/map_convert.ts';
 import type {
-    SunOptions,
-    SunParamater,
+    Custom3DTileRenderLayer,
+    LatLon,
+    LightGroup,
+    LightGroupOption,
     PickHit,
-    Custom3DTileRenderLayer, LatLon
+    SunOptions,
+    SunParamater
 } from '../Interface.ts'
 import * as THREE from 'three';
+import {InstancedMesh} from 'three';
 import {CustomVectorSource} from "../source/CustomVectorSource.ts"
 import {buildShadowMatrix, calculateSunDirectionMaplibre} from "../shadow/ShadowHelper.ts";
 import InstancedGroupMesh from "./InstancedGroupMesh.ts";
-import {InstancedMesh} from "three";
+
 export type InstanceLayerOpts = {
     id: string;
     applyGlobeMatrix: boolean;
@@ -28,6 +27,7 @@ export type InstanceLayerOpts = {
 export type DataTileInfoForInstanceLayer = {
     sceneTile: THREE.Scene;
 }
+
 export class InstanceLayer implements Custom3DTileRenderLayer {
     id: string;
     visible: boolean = true;
@@ -40,7 +40,6 @@ export class InstanceLayer implements Custom3DTileRenderLayer {
     private vectorSource: CustomVectorSource | null = null;
     private tileCache: Map<string, DataTileInfoForInstanceLayer> = new Map<string, DataTileInfoForInstanceLayer>();
     private objectUrls: string[];
-    //private rootObj: THREE.Object3D | null = null;
     private shadowMaterial: THREE.MeshBasicMaterial | null = null;
     private mapObj3d: Map<string, THREE.Object3D> = new Map<string, THREE.Object3D>();
     //private raycaster = new THREE.Raycaster();
@@ -49,6 +48,12 @@ export class InstanceLayer implements Custom3DTileRenderLayer {
     private renderer: THREE.WebGLRenderer | null = null;
     private camera: THREE.Camera | null = null;
     private applyGlobeMatrix: boolean | false = false;
+    private light: LightGroup | null = null;
+    private currentScene: THREE.Scene | null = null;
+    private baseMatrix = new THREE.Matrix4();
+    private shadowMatrix = new THREE.Matrix4();
+    private finalMatrix = new THREE.Matrix4();
+    private sunVector = new THREE.Vector3();
 
     constructor(opts: InstanceLayerOpts & { onPick?: (info: PickHit) => void } & { onPickfail?: () => void }) {
         this.id = opts.id;
@@ -65,6 +70,10 @@ export class InstanceLayer implements Custom3DTileRenderLayer {
                     THREE.MathUtils.degToRad(opts.sun.azimuth)),
                 shadow: opts.sun.shadow
             }
+        }
+        const dirLight = (this.sun?.sun_dir ?? new THREE.Vector3(0.5, 0.5, 0.5)).clone().normalize();
+        if (this.sun) {
+            this.light = createLightGroup(dirLight);
         }
         this.shadowMaterial = new THREE.MeshBasicMaterial({
             color: 0x000000,
@@ -103,8 +112,6 @@ export class InstanceLayer implements Custom3DTileRenderLayer {
                 }
             });
         })
-
-
     }
 
     onRemove(): void {
@@ -116,41 +123,149 @@ export class InstanceLayer implements Custom3DTileRenderLayer {
 
     setVectorSource(source: CustomVectorSource): void {
         this.vectorSource = source;
-        this.vectorSource.onUnloadTile = (tile_key) => {
+        this.vectorSource.registerUnLoadTile((tile_key: string) => {
             if (this.tileCache.has(tile_key)) {
+                console.log('delete tile key');
                 this.tileCache.delete(tile_key);
             }
-        }
+        });
     }
 
     private tileKey(x: number, y: number, z: number): string {
         return `${z}/${x}/${y}`;
     }
 
-    private updateShadow(scene: THREE.Scene) {
-        const sun_dir = this.sun?.sun_dir;
-        if (!sun_dir) {
+    setLightOption(option: LightGroupOption) {
+        if (!this.light) return;
+        const {directional, hemisphere, ambient} = option;
+        if (directional) {
+            const l = this.light.dirLight;
+            if (directional.intensity !== undefined)
+                l.intensity = directional.intensity;
+            if (directional.color !== undefined)
+                l.color.set(directional.color);
+            if (directional.direction !== undefined)
+                l.target.position.copy(
+                    directional.direction.clone().multiplyScalar(10000)
+                );
+        }
+        if (hemisphere) {
+            const l = this.light.hemiLight;
+            if (hemisphere.intensity !== undefined)
+                l.intensity = hemisphere.intensity;
+            if (hemisphere.skyColor !== undefined)
+                l.color.set(hemisphere.skyColor);
+            if (hemisphere.groundColor !== undefined)
+                l.groundColor.set(hemisphere.groundColor);
+        }
+        if (ambient) {
+            const l = this.light.ambientLight;
+            if (ambient.intensity !== undefined)
+                l.intensity = ambient.intensity;
+            if (ambient.color !== undefined)
+                l.color.set(ambient.color);
+        }
+    }
+
+    prerender(): void {
+        if (!this.map || !this.vectorSource || !(this.objectUrls.length === this.mapObj3d.size) || this.mapObj3d.size === 0) {
             return;
         }
-        for(const [key] of this.mapObj3d){
-            const instanceMesh = scene.getObjectByName(`instancedMesh_${key}`) as InstancedGroupMesh;
-            const instanceShadowMesh = scene.getObjectByName(`instanceShadowMesh_${key}`) as InstancedMesh;
-            if(instanceShadowMesh){
-                const count = instanceShadowMesh.count;
-                for (let i = 0; i < count; ++i) {
-                    const scaleUnit: number = instanceMesh.getUserDataAt(i)?.scale_unit as number;
-                    if (scaleUnit) {
-                        const baseMatrix = new THREE.Matrix4();
-                        const shadowMatrix = new THREE.Matrix4();
-                        const finalMatrix = new THREE.Matrix4();
-                        instanceMesh.getMatrixAt(i, baseMatrix);
-                        buildShadowMatrix(new THREE.Vector3(sun_dir.x, sun_dir.y, -sun_dir.z / scaleUnit), 0, shadowMatrix);
-                        finalMatrix.multiplyMatrices(shadowMatrix, baseMatrix);
-                        instanceShadowMesh.setMatrixAt(i, finalMatrix);
-                    }
+        const zoom = clampZoom(
+            this.vectorSource.minZoom,
+            this.vectorSource.maxZoom,
+            Math.round(this.map.getZoom())
+        );
+
+        const visibleTiles = this.map.coveringTiles({
+            tileSize: this.tileSize,
+            minzoom: zoom,
+            maxzoom: zoom,
+            roundZoom: true,
+        });
+
+        // Cache tiles and check readiness
+        for (const tile of visibleTiles) {
+            const canonicalID = tile.canonical;
+            const vectorTile = this.vectorSource.getTile(tile, {
+                build_triangle: true,
+            });
+            const tile_key = this.tileKey(tile.canonical.x, tile.canonical.y, tile.canonical.z);
+            if (vectorTile.state === 'loaded') {
+                const layer = vectorTile.data?.layers[this.sourceLayer];
+                if (!layer) {
+                    continue;
+                }
+                let tileDataInfo = this.tileCache.get(tile_key);
+                if (tileDataInfo) continue;
+                if (!tileDataInfo) {
+                    //create tile data info
+                    const scene = new THREE.Scene();
+                    tileDataInfo = {
+                        sceneTile: scene
+                    };
+                    //const dirLight = (this.sun?.sun_dir ?? new THREE.Vector3(0.5, 0.5, 0.5)).clone().normalize();
+                    //createLightGroup(scene, dirLight);
+                    this.tileCache.set(tile_key, tileDataInfo);
+                }
+                const count = layer.features.length;
+                if (count === 0) continue;
+
+                const mapNumber = new Map<string, number>();
+                for (const key of this.mapObj3d.keys()) {
+                    mapNumber.set(key, 0);
+                }
+                this.distribute(mapNumber, this.mapObj3d.size, count);
+                const instanceGroups: InstancedGroupMesh[] = [];
+                for (const [key, object_count] of mapNumber) {
+                    const obj3d = this.mapObj3d.get(key);
+                    if (!obj3d) continue;
+                    const instancedObject3d = new InstancedGroupMesh(obj3d as THREE.Group, object_count);
+                    instancedObject3d.name = `instancedMesh_${key}`;
+                    obj3d.traverse((child) => {
+                        if (child instanceof THREE.Mesh) {
+                            if (this.shadowMaterial) {
+                                const instanceShadow = new InstancedMesh(child.geometry, this.shadowMaterial, object_count);
+                                instanceShadow.name = `instanceShadowMesh_${key}`;
+                                tileDataInfo?.sceneTile.add(instanceShadow);
+                            }
+                        }
+                    });
+                    tileDataInfo.sceneTile.add(instancedObject3d);
+                    instanceGroups.push(instancedObject3d);
+                }
+                //shadow obj
+                for (const [index, feature] of layer.features.entries()) {
+                    const point = feature.geometry[0][0];
+                    const lat_lon: LatLon = tileLocalToLatLon(
+                        canonicalID.z,
+                        canonicalID.x,
+                        canonicalID.y,
+                        point.x,
+                        point.y,
+                    );
+                    const scaleUnit = getMetersPerExtentUnit(lat_lon.lat, canonicalID.z);
+                    const matrix = new THREE.Matrix4();
+                    const scale = new THREE.Vector3(
+                        scaleUnit,
+                        -scaleUnit,
+                        1
+                    );
+                    const position = new THREE.Vector3(point.x, point.y, 0);
+                    const rotation = new THREE.Quaternion()
+                        .setFromAxisAngle(
+                            new THREE.Vector3(1, 0, 0),
+                            0
+                        );
+                    matrix.compose(position, rotation, scale);
+                    const groupIndex = index % instanceGroups.length;
+                    const instanceIndex = Math.floor(index / instanceGroups.length);
+                    instanceGroups[groupIndex].setUserDataAt(instanceIndex, {
+                        scale_unit: scaleUnit
+                    });
+                    instanceGroups[groupIndex].setMatrixAt(instanceIndex, matrix);
                 }
             }
-            instanceShadowMesh.instanceMatrix.needsUpdate = true;
         }
     }
 
@@ -264,110 +379,8 @@ export class InstanceLayer implements Custom3DTileRenderLayer {
         }
     }
 
-    prerender(): void {
-        if (!this.map || !this.vectorSource || !(this.objectUrls.length === this.mapObj3d.size) || this.mapObj3d.size === 0) {
-            return;
-        }
-        const zoom = clampZoom(
-            this.vectorSource.minZoom,
-            this.vectorSource.maxZoom,
-            Math.round(this.map.getZoom())
-        );
-
-        const visibleTiles = this.map.coveringTiles({
-            tileSize: this.tileSize,
-            minzoom: zoom,
-            maxzoom: zoom,
-            roundZoom: true,
-        });
-
-        // Cache tiles and check readiness
-        for (const tile of visibleTiles) {
-            const canonicalID = tile.canonical;
-            const vectorTile = this.vectorSource.getTile(tile, {
-                build_triangle: true,
-            });
-            const tile_key = this.tileKey(tile.canonical.x, tile.canonical.y, tile.canonical.z);
-            if (vectorTile.state === 'loaded') {
-                const layer = vectorTile.data?.layers[this.sourceLayer];
-                if (!layer) {
-                    continue;
-                }
-                let tileDataInfo = this.tileCache.get(tile_key);
-                if (tileDataInfo) continue;
-                if (!tileDataInfo) {
-                    //create tile data info
-                    const scene = new THREE.Scene();
-                    tileDataInfo = {
-                        sceneTile: scene
-                    };
-                    const dirLight = (this.sun?.sun_dir ?? new THREE.Vector3(0.5, 0.5, 0.5)).clone().normalize();
-                    createLightGroup(scene, dirLight);
-                    this.tileCache.set(tile_key, tileDataInfo);
-                }
-                const count = layer.features.length;
-                if (count === 0) continue;
-
-                const mapNumber = new Map<string, number>();
-                for (const key of this.mapObj3d.keys()) {
-                    mapNumber.set(key, 0);
-                }
-                this.distribute(mapNumber, this.mapObj3d.size, count);
-                const instanceGroups : InstancedGroupMesh[] = [];
-                for (const [key, object_count] of mapNumber) {
-                    const obj3d = this.mapObj3d.get(key);
-                    if (!obj3d) continue;
-                    const instancedObject3d = new InstancedGroupMesh(obj3d as THREE.Group, object_count);
-                    instancedObject3d.name = `instancedMesh_${key}`;
-                    obj3d.traverse((child) => {
-                        if (child instanceof THREE.Mesh) {
-                            if(this.shadowMaterial){
-                                const instanceShadow = new InstancedMesh(child.geometry,this.shadowMaterial,object_count);
-                                instanceShadow.name = `instanceShadowMesh_${key}`;
-                                tileDataInfo?.sceneTile.add(instanceShadow);
-                            }
-                        }
-                    });
-                    tileDataInfo.sceneTile.add(instancedObject3d);
-                    instanceGroups.push(instancedObject3d);
-                }
-                //shadow obj
-                for (const [index, feature] of layer.features.entries()) {
-                    const point = feature.geometry[0][0];
-                    const lat_lon: LatLon = tileLocalToLatLon(
-                        canonicalID.z,
-                        canonicalID.x,
-                        canonicalID.y,
-                        point.x,
-                        point.y,
-                    );
-                    const scaleUnit = getMetersPerExtentUnit(lat_lon.lat, canonicalID.z);
-                    const matrix = new THREE.Matrix4();
-                    const scale = new THREE.Vector3(
-                        scaleUnit,
-                        -scaleUnit,
-                        1
-                    );
-                    const position = new THREE.Vector3(point.x, point.y, 0);
-                    const rotation = new THREE.Quaternion()
-                        .setFromAxisAngle(
-                            new THREE.Vector3(1, 0, 0),
-                            0
-                        );
-                    matrix.compose(position, rotation, scale);
-                    const groupIndex = index % instanceGroups.length;
-                    const instanceIndex = Math.floor(index / instanceGroups.length);
-                    instanceGroups[groupIndex].setUserDataAt(instanceIndex,{
-                        scale_unit: scaleUnit
-                    });
-                    instanceGroups[groupIndex].setMatrixAt(instanceIndex, matrix);
-                }
-            }
-        }
-    }
-
     render(): void {
-        if (!this.map || !this.camera || !this.renderer || !this.visible || !this.vectorSource) {
+        if (!this.map || !this.camera || !this.renderer || !this.visible || !this.vectorSource || !this.light) {
             return;
         }
         this.renderer.clearStencil();
@@ -391,10 +404,42 @@ export class InstanceLayer implements Custom3DTileRenderLayer {
             if (tileInfo) {
                 const tileMatrix = projectionData.mainMatrix;
                 this.camera.projectionMatrix = new THREE.Matrix4().fromArray(tileMatrix);
+                if (this.currentScene != tileInfo.sceneTile) {
+                    if (this.currentScene) {
+                        this.currentScene.remove(this.light);
+                    }
+                    tileInfo.sceneTile.add(this.light);
+                    this.currentScene = tileInfo.sceneTile;
+                }
                 this.updateShadow(tileInfo.sceneTile);
                 this.renderer.resetState();
                 this.renderer.render(tileInfo.sceneTile, this.camera);
             }
+        }
+    }
+
+    private updateShadow(scene: THREE.Scene) {
+        const sun_dir = this.sun?.sun_dir;
+        if (!sun_dir) {
+            return;
+        }
+        for (const [key] of this.mapObj3d) {
+            const instanceMesh = scene.getObjectByName(`instancedMesh_${key}`) as InstancedGroupMesh;
+            const instanceShadowMesh = scene.getObjectByName(`instanceShadowMesh_${key}`) as InstancedMesh;
+            if (instanceShadowMesh) {
+                const count = instanceShadowMesh.count;
+                for (let i = 0; i < count; ++i) {
+                    const scaleUnit: number = instanceMesh.getUserDataAt(i)?.scale_unit as number;
+                    if (scaleUnit) {
+                        instanceMesh.getMatrixAt(i, this.baseMatrix);
+                        this.sunVector.set(sun_dir.x, sun_dir.y, -sun_dir.z / scaleUnit);
+                        buildShadowMatrix(this.sunVector, 0, this.shadowMatrix);
+                        this.finalMatrix.multiplyMatrices(this.shadowMatrix, this.baseMatrix);
+                        instanceShadowMesh.setMatrixAt(i, this.finalMatrix);
+                    }
+                }
+            }
+            instanceShadowMesh.instanceMatrix.needsUpdate = true;
         }
     }
 }
