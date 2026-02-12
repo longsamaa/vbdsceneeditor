@@ -144,14 +144,14 @@ export function prepareModelForRender(model: THREE.Object3D, setDefaultMat: bool
             if (setDefaultMat) {
                 (child as THREE.Mesh).material = default_mat;
             } else {
-                const mat = (child as THREE.Mesh).material;
+               /* const mat = (child as THREE.Mesh).material;
                 if (Array.isArray(mat)) {
                     for (const m of mat) {
                         m.side = THREE.DoubleSide;
                     }
                 } else {
                     mat.side = THREE.DoubleSide;
-                }
+                }*/
             }
         }
     });
@@ -237,7 +237,7 @@ export function createLightGroup(dir: THREE.Vector3): LightGroup {
     const dirLight = new THREE.DirectionalLight(0xffffff, 5);
     dirLight.name = 'dir_light';
     dirLight.color.setHSL(0.12, 0.7, 0.98);
-    dirLight.target.position.copy(dir.clone().multiplyScalar(10000));
+    dirLight.target.position.copy(dir.clone().multiplyScalar(3000000));
     const hemiLight = new THREE.HemisphereLight(0xffffff, 0xffffff, 2.5);
     hemiLight.name = 'hemi_light';
     hemiLight.color.setHSL(0.55, 0.4, 0.95);

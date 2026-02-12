@@ -81,3 +81,19 @@ export function latlonToLocal(
 export function clampZoom(minZoom: number, maxZoom: number, z: number): number {
     return Math.max(minZoom, Math.min(maxZoom, z));
 }
+
+export function mercatorXfromLng(lng: number) {
+    return (180 + lng) / 360;
+}
+
+export function mercatorYfromLat(lat: number) {
+    return (180 - (180 / Math.PI * Math.log(Math.tan(Math.PI / 4 + lat * Math.PI / 360)))) / 360;
+}
+
+export function projectToWorldCoordinates(worldSize: number, latlon: LatLon){
+    const lat = clamp(latlon.lat, -LATITUDE_MAX, LATITUDE_MAX);
+    return {
+        x : mercatorXfromLng(latlon.lon) * worldSize,
+        y : mercatorYfromLat(lat) * worldSize
+    };
+}

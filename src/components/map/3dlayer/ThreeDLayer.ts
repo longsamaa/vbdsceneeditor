@@ -1,4 +1,4 @@
-import {Map, MapMouseEvent, OverscaledTileID} from 'maplibre-gl';
+import maplibregl, {type CustomRenderMethodInput, MapMouseEvent, OverscaledTileID} from 'maplibre-gl';
 import * as THREE from 'three';
 import {LRUCache} from 'lru-cache';
 import type {
@@ -13,13 +13,25 @@ import type {
     SunOptions,
     SunParamater
 } from '../Interface.ts';
-import {clampZoom, getMetersPerExtentUnit, tileLocalToLatLon} from '../convert/map_convert.ts';
+import {
+    clampZoom,
+    getMetersPerExtentUnit,
+    tileLocalToLatLon,
+    projectToWorldCoordinates
+} from '../convert/map_convert.ts';
 import {parseLayerTileInfo} from '../tile/tile.ts';
 import {createBuildingGroup, createLightGroup, createShadowGroup, transformModel} from '../model/objModel.ts'
 import {calculateSunDirectionMaplibre} from '../shadow/ShadowHelper.ts'
 import {MaplibreShadowMesh} from "../shadow/ShadowGeometry.ts";
 import {CustomVectorSource} from "../source/CustomVectorSource.ts"
 import {ModelFetch} from "./ModelFetch.ts";
+import {
+    calculateTileMatrixThree,
+    createShadowMapMatrix,
+} from "../shadow/ShadowCamera.ts";
+import {ShadowRenderTarget} from "../shadow/ShadowRenderTarget.ts";
+import {LinearDepthMaterial, ShadowDepthMaterial} from "../shadow/DepthMaterial.ts";
+import {ShadowMaterial} from "three";
 
 
 /** Config cho layer */
@@ -68,21 +80,25 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer {
     private modelFetcher: ModelFetch = new ModelFetch(8);
     readonly type = 'custom' as const;
     readonly renderingMode = '3d' as const;
+    private shadowRenderPass : ShadowRenderTarget | null = null;
+    private shadowMatrix : THREE.Matrix4 = new THREE.Matrix4();
     private light: LightGroup | null = null;
     private currentScene: THREE.Scene | null = null;
-    private map: Map | null = null;
+    private map: maplibregl.Map | null = null;
     private renderer: THREE.WebGLRenderer | null = null;
     private camera: THREE.Camera | null = null;
     private sun: SunParamater | null | undefined;
     private vectorSource: CustomVectorSource | null = null;
     private readonly rootUrl: string;
-    private readonly minZoom: number;
-    private readonly maxZoom: number;
+    private minZoom: number;
+    private maxZoom: number;
     private readonly tileSize: number;
     private readonly applyGlobeMatrix: boolean;
     private tileCache: LRUCache<string, TileCacheEntry>;
     private modelCache: LRUCache<string, ModelCacheEntry>;
     private raycaster = new THREE.Raycaster();
+    private depthMaterial : LinearDepthMaterial | null = null;
+    private shadowDepthMat :  ShadowDepthMaterial = new ShadowDepthMaterial(100);
 
     constructor(opts: Map4DModelsLayerOptions & { onPick?: (info: PickHit) => void } & {
         onPickfail?: () => void
@@ -100,7 +116,9 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer {
                 azimuth: opts.sun.azimuth,
                 sun_dir: calculateSunDirectionMaplibre(THREE.MathUtils.degToRad(opts.sun.altitude),
                     THREE.MathUtils.degToRad(opts.sun.azimuth)),
-                shadow: opts.sun.shadow
+                shadow: opts.sun.shadow,
+                lat: opts.sun.lat,
+                lon: opts.sun.lon,
             }
         }
         const dirLight = (this.sun?.sun_dir ?? new THREE.Vector3(0.5, 0.5, 0.5)).clone().normalize();
@@ -143,7 +161,35 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer {
         }
     }
 
-    prerender(): void {
+    private calShadowMatrix(args: CustomRenderMethodInput){
+        if(!this.map || !this.sun) return;
+        const tr = this.map.transform;
+        const point = projectToWorldCoordinates(tr.worldSize, {
+            lat: tr.center.lat,
+            lon: tr.center.lng,
+        });
+        this.shadowMatrix = createShadowMapMatrix(
+            point.x,
+            point.y,
+            tr.worldSize,
+            tr.pixelsPerMeter,
+            args.fov,
+            tr.width,
+            tr.height,
+            args.nearZ,
+            args.farZ,
+            tr.cameraToCenterDistance,
+            this.sun.azimuth - 180,
+            this.sun.altitude,
+            tr.rollInRadians,
+            {x : tr.centerOffset.x, y : tr.centerOffset.y},
+            0);
+        if(this.shadowDepthMat){
+            this.shadowDepthMat.uniforms.far.value = args.farZ;
+        }
+    }
+
+    prerender(gl, args: CustomRenderMethodInput): void {
         if (!this.map || !this.vectorSource) {
             return;
         }
@@ -222,6 +268,7 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer {
                 }
             }
         }
+        this.calShadowMatrix(args);
     }
 
     setVectorSource(source: CustomVectorSource): void {
@@ -246,6 +293,8 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer {
         });
         this.renderer.autoClear = false;
         this.renderer.localClippingEnabled = true;
+        this.shadowRenderPass = new ShadowRenderTarget(2048);
+        this.depthMaterial = new LinearDepthMaterial(this.shadowRenderPass.shadow_Target);
         // thêm sự kiện pick
         map.on('click', this.handleClick);
     }
@@ -296,7 +345,7 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer {
         if (!this.map || !this.camera || !this.renderer || !this.visible || !this.vectorSource || !this.light) {
             return;
         }
-        this.renderer.clearStencil();
+        if (this.map.getZoom() < this.minZoom) return;
         const zoom = clampZoom(this.vectorSource.minZoom,
             this.vectorSource.maxZoom,
             Math.round(this.map.getZoom()));
@@ -307,17 +356,60 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer {
             roundZoom: true,
         });
         const tr = this.map.transform;
+        const lightMatrices: Map<string,THREE.Matrix4> = new Map();
+        if(this.shadowRenderPass){
+            this.shadowRenderPass.beginRenderShadowPass(this.renderer);
+            for (const tile of visibleTiles) {
+                const mat = calculateTileMatrixThree(tile.toUnwrapped(), tr.worldSize);
+                const light_matrix = new THREE.Matrix4();
+                light_matrix.multiplyMatrices(this.shadowMatrix, mat);
+                const tile_key = this.tileKey(tile);
+                const tileInfo = this.tileCache.get(tile_key);
+                if (!tileInfo) continue;
+                if (!tileInfo.sceneTile) continue;
+                if (tileInfo) {
+                    this.camera.projectionMatrix = light_matrix;
+                    if (this.currentScene != tileInfo.sceneTile) {
+                        if (this.currentScene) {
+                            this.currentScene.remove(this.light);
+                        }
+                        tileInfo.sceneTile.add(this.light);
+                        this.currentScene = tileInfo.sceneTile;
+                    }
+                    //this.renderer.resetState();
+                    this.renderer.render(tileInfo.sceneTile, this.camera);
+                    lightMatrices.set(tile_key,light_matrix);
+                }
+            }
+            this.shadowRenderPass.endRenderShadowPass(this.renderer);
+        }
+        this.renderer.resetState();
+        this.renderer.clearStencil();
+        this.renderer.clearDepth();
         for (const tile of visibleTiles) {
             const tile_key = this.tileKey(tile);
             const projectionData = tr.getProjectionData({
                 overscaledTileID: tile,
                 applyGlobeMatrix: this.applyGlobeMatrix,
             });
+            const tileMatrix = projectionData.mainMatrix;
             const tileInfo = this.tileCache.get(tile_key);
             if (!tileInfo) continue;
             if (!tileInfo.sceneTile) continue;
             if (tileInfo) {
-                const tileMatrix = projectionData.mainMatrix;
+                //test
+                //update mat
+                const light_matrix = lightMatrices.get(tile_key);
+                if(light_matrix){
+                    this.depthMaterial?.update(light_matrix,this.shadowRenderPass?.getDepthTexture());
+                }
+                tileInfo.sceneTile.traverse((obj) => {
+                    if (obj instanceof THREE.Mesh) {
+                        if(!(obj.material instanceof LinearDepthMaterial) && !(obj instanceof MaplibreShadowMesh)) {
+                            obj.material = this.shadowDepthMat;
+                        }
+                    }
+                });
                 this.camera.projectionMatrix = new THREE.Matrix4().fromArray(tileMatrix);
                 if (this.currentScene != tileInfo.sceneTile) {
                     if (this.currentScene) {
@@ -327,7 +419,6 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer {
                     this.currentScene = tileInfo.sceneTile;
                 }
                 this.updateShadow(tileInfo.sceneTile);
-                this.renderer.resetState();
                 this.renderer.render(tileInfo.sceneTile, this.camera);
             }
         }

@@ -19,6 +19,8 @@ import InstancedGroupMesh from "./InstancedGroupMesh.ts";
 export type InstanceLayerOpts = {
     id: string;
     applyGlobeMatrix: boolean;
+    minZoom: number;
+    maxZoom: number;
     sourceLayer: string,
     sun?: SunOptions;
     objectUrl: string[],
@@ -54,6 +56,8 @@ export class InstanceLayer implements Custom3DTileRenderLayer {
     private shadowMatrix = new THREE.Matrix4();
     private finalMatrix = new THREE.Matrix4();
     private sunVector = new THREE.Vector3();
+    private minZoom: number;
+    private maxZoom: number;
 
     constructor(opts: InstanceLayerOpts & { onPick?: (info: PickHit) => void } & { onPickfail?: () => void }) {
         this.id = opts.id;
@@ -86,6 +90,8 @@ export class InstanceLayer implements Custom3DTileRenderLayer {
             stencilZPass: THREE.IncrementStencilOp,
             side: THREE.DoubleSide
         });
+        this.minZoom = opts.minZoom ?? 0;
+        this.maxZoom = opts.maxZoom ?? 19;
     }
 
     onAdd(map: maplibregl.Map, gl: WebGLRenderingContext): void {
@@ -171,6 +177,7 @@ export class InstanceLayer implements Custom3DTileRenderLayer {
         if (!this.map || !this.vectorSource || !(this.objectUrls.length === this.mapObj3d.size) || this.mapObj3d.size === 0) {
             return;
         }
+        if (this.map.getZoom() < this.minZoom) return;
         const zoom = clampZoom(
             this.vectorSource.minZoom,
             this.vectorSource.maxZoom,

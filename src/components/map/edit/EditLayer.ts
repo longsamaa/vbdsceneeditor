@@ -269,6 +269,7 @@ export class EditLayer implements Custom3DTileRenderLayer {
             return;
         }
         this.renderer.clearStencil();
+        this.renderer.clearDepth();
         const zoom = clampZoom(this.editorLevel,
             this.editorLevel,
             Math.round(this.map.getZoom()));

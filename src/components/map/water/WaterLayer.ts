@@ -1,19 +1,12 @@
-import maplibregl, {
-    MapMouseEvent,
-} from 'maplibre-gl';
+import maplibregl, {MapMouseEvent,} from 'maplibre-gl';
 import {reverseFaceWinding} from '../model/objModel.ts';
 import {classifyRings} from '@mapbox/vector-tile';
-import {latlonToLocal, clampZoom} from '../convert/map_convert.ts';
-import type {
-    SunOptions,
-    SunParamater,
-    PickHit,
-    Custom3DTileRenderLayer
-} from '../Interface.ts'
+import {clampZoom, latlonToLocal} from '../convert/map_convert.ts';
+import type {Custom3DTileRenderLayer, PickHit, SunOptions, SunParamater} from '../Interface.ts'
 import * as THREE from 'three';
 import {CustomVectorSource} from "../source/CustomVectorSource.ts"
 import {buildGeo, triangulatePolygonWithHoles} from "../source/GeojsonConverter.ts";
-import type {Feature, Polygon, MultiPolygon, GeoJsonProperties, Position} from 'geojson';
+import type {Feature, GeoJsonProperties, MultiPolygon, Polygon, Position} from 'geojson';
 import {createWaterMaterial} from "./WaterMaterial.ts";
 import * as turf from "@turf/turf";
 import {calculateSunDirectionMaplibre} from "../shadow/ShadowHelper.ts";
@@ -23,11 +16,12 @@ export type WaterLayerOpts = {
     applyGlobeMatrix: boolean;
     sourceLayer: string,
     sun?: SunOptions;
+    minZoom?: number,
+    maxZoom?: number,
 }
 
 export class WaterLayer implements Custom3DTileRenderLayer {
     id: string;
-    editorLevel: number = 16;
     visible: boolean = true;
     onPick?: (info: PickHit) => void;
     onPickfail?: () => void;
@@ -49,6 +43,8 @@ export class WaterLayer implements Custom3DTileRenderLayer {
     private waterNormalTexture: THREE.Texture | null = null;
     private waterGeometry: Feature<Polygon | MultiPolygon, GeoJsonProperties> | null = null;
     private isRebuildWaterGeometry: boolean = true;
+    private minZoom: number = 0;
+    private maxZoom: number = 20;
     private readonly TILE_EXTENT = 8192;
 
     constructor(opts: WaterLayerOpts & { onPick?: (info: PickHit) => void } & { onPickfail?: () => void }) {
@@ -65,7 +61,7 @@ export class WaterLayer implements Custom3DTileRenderLayer {
         );
         this.waterMaterial = createWaterMaterial({
             color: 0x2a7fff,
-            opacity: 1.0,
+            opacity: 0.8,
             tex: this.waterNormalTexture,
         });
         if (opts.sun) {
@@ -80,6 +76,9 @@ export class WaterLayer implements Custom3DTileRenderLayer {
         if (this.sun) {
             this.waterMaterial.uniforms.lightDir.value = this.sun.sun_dir.clone().normalize();
         }
+        THREE.BufferGeometry
+        this.minZoom = opts.minZoom ?? 0;
+        this.maxZoom = opts.maxZoom ?? 20;
     }
 
     onAdd(map: maplibregl.Map, gl: WebGLRenderingContext): void {
@@ -215,7 +214,7 @@ export class WaterLayer implements Custom3DTileRenderLayer {
         if (!this.map || !this.vectorSource || !this.isRebuildWaterGeometry) {
             return;
         }
-
+        if (this.map.getZoom() < this.minZoom) return;
         const zoom = clampZoom(
             this.vectorSource.minZoom,
             this.vectorSource.maxZoom,

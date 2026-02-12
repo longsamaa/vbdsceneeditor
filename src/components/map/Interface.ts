@@ -45,12 +45,16 @@ export type SunOptions = {
     shadow: boolean;
     altitude: number;
     azimuth: number;
+    lat : number | null;
+    lon : number | null;
 }
 export type SunParamater = {
     altitude: number;
     azimuth: number;
     sun_dir: THREE.Vector3;
     shadow: boolean;
+    lat : number | null;
+    lon : number | null;
 }
 export type PickHit = {
     dist: number;

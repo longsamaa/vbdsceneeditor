@@ -130,6 +130,7 @@ function createDefaultMap(map: maplibregl.Map, overlay_layer: OverlayLayer, outl
         altitude: sunPos.altitude,
         azimuth: sunPos.azimuth,
     }
+    map.setBearing(sunPos.azimuth - 180);
 
     const map4dSource = new CustomVectorSource({
         id: 'map4d source',
@@ -146,9 +147,15 @@ function createDefaultMap(map: maplibregl.Map, overlay_layer: OverlayLayer, outl
         id: 'test_layer',
         sourceLayer: sourceLayer,
         rootUrl: rootModelUrl,
-        minZoom: 16,
+        minZoom: 14,
         maxZoom: 19,
-        sun: sun_options,
+        sun: {
+            altitude : sun_options.altitude,
+            azimuth : sun_options.azimuth,
+            shadow : true,
+            lat : center.lat,
+            lon : center.lng,
+        },
         onPick: (info) => {
             overlay_layer.setCurrentTileID(info.overScaledTileId);
             overlay_layer.attachGizmoToObject(info.object);
@@ -250,9 +257,7 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(({
         const is_high_performance_render = import.meta.env.VITE_HIGH_PERFORMANCE_RENDER;
         if (is_high_performance_render === 'true') {
             canvas_config = {
-                antialias: true,
-                powerPreference: 'high-performance',
-                contextType: 'webgl2',
+                antialias: true
             }
         }
         // Khởi tạo map
@@ -260,9 +265,9 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(({
             container: mapContainer.current,
             style: style_path, // Free demo tiles
             center: center,
-            zoom: zoom,
-            pitch: 0,
-            bearing: 0,
+            zoom: 15,
+            pitch: 90,
+            bearing: 67.97536302882756,
             canvasContextAttributes: canvas_config
         });
         //map.current._showTileBoundaries = true;
