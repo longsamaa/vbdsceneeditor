@@ -2,18 +2,19 @@ import * as THREE from 'three';
 import type {DepthTexture} from "three/src/textures/DepthTexture";
 
 export class ShadowDepthMaterial extends THREE.ShaderMaterial {
-    constructor(far: number) {
+    constructor(near : number, far: number) {
         super({
             uniforms: {
-                far: { value: far }
+                far: { value: far },
+                near : {value : near}
             },
             vertexShader: `
                 uniform float far;
+                uniform float near;
                 varying float vDepth;
-
                 void main() {
                     vec4 clipPos = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-                    vDepth = log(1.0 + clipPos.w) / log(1.0 + far);
+                    vDepth = 2.0 * log(clipPos.w / near) / log(far / near) - 1.0;
                     gl_Position = clipPos;
                 }
             `,

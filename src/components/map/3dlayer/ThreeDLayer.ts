@@ -186,6 +186,7 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer {
             0);
         if(this.shadowDepthMat){
             this.shadowDepthMat.uniforms.far.value = args.farZ;
+            this.shadowDepthMat.uniforms.near.value = args.nearZ;
         }
     }
 
