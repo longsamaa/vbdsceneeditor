@@ -29,9 +29,9 @@ export class MaplibreShadowMesh extends THREE.Mesh {
         this.plane.normal.set(0, 0, 1);
         this.plane.constant = -planeZ;
         this.lightPos4D.set(
-            -this.sunDirVector.x,
-            -this.sunDirVector.y,
-            -this.sunDirVector.z,
+            this.sunDirVector.x,
+            this.sunDirVector.y,
+            this.sunDirVector.z,
             0
         );
         this.tempVector3.set(this.lightPos4D.x, this.lightPos4D.y, this.lightPos4D.z);

@@ -439,7 +439,7 @@ export class InstanceLayer implements Custom3DTileRenderLayer {
                     const scaleUnit: number = instanceMesh.getUserDataAt(i)?.scale_unit as number;
                     if (scaleUnit) {
                         instanceMesh.getMatrixAt(i, this.baseMatrix);
-                        this.sunVector.set(sun_dir.x, sun_dir.y, -sun_dir.z / scaleUnit);
+                        this.sunVector.set(-sun_dir.x, -sun_dir.y, sun_dir.z / scaleUnit);
                         buildShadowMatrix(this.sunVector, 0, this.shadowMatrix);
                         this.finalMatrix.multiplyMatrices(this.shadowMatrix, this.baseMatrix);
                         instanceShadowMesh.setMatrixAt(i, this.finalMatrix);

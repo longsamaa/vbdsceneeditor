@@ -47,56 +47,6 @@ export function calculateTileMatrixThree(
     return worldMatrix;
 }
 
-/*
-export function testCreateMatrix(pixelPerOneMeter: number,
-                                 worldSize: number,
-                                 cameraToCenterDistance: number,
-                                 lightDir: THREE.Vector3,
-                                 cameraZ: number,
-                                 center: LatLon,
-                                 width: number,
-                                 height: number,
-                                 args: CustomRenderMethodInput): THREE.Matrix4 {
-    const point = projectToWorldCoordinates(worldSize, center);
-    const fov = args.fov;
-    const nearz = args.nearZ;
-    const farz = args.farZ;
-// Projection matrix
-    const projMatrix = new THREE.Matrix4();
-    perspective(
-        projMatrix,
-        fov * Math.PI / 180,
-        width / height,
-        nearz,
-        farz
-    );
-// Tính trong local space
-    const center_p = new THREE.Vector3(point.x, point.y, 0);
-    const scale = cameraZ / lightDir.z;
-    const lightPos_world = center_p.clone().addScaledVector(lightDir, scale);
-// Chuyển sang local space
-    const center_local = new THREE.Vector3(0, 0, 0);
-    const lightPos_local = lightPos_world.clone().sub(center_p);
-// View matrix trong local space
-    const viewMatrix = new THREE.Matrix4();
-    const up = new THREE.Vector3(0, 0, 1);
-    viewMatrix.lookAt(lightPos_local, center_local, up);
-// View-Projection matrix
-    const m = new THREE.Matrix4();
-    m.multiplyMatrices(projMatrix, viewMatrix);
-// Final matrix
-    const finalMatrix = new THREE.Matrix4();
-    finalMatrix.copy(m);
-// 1. Flip Y axis
-    finalMatrix.multiply(new THREE.Matrix4().makeScale(1, -1, 1));
-// 2. Translate về center
-    const translateMatrix = new THREE.Matrix4();
-    translateMatrix.makeTranslation(-center_p.x, -center_p.y, 0);
-    finalMatrix.multiply(translateMatrix);
-// 3. Scale z theo pixelPerMeter
-    finalMatrix.multiply(new THREE.Matrix4().makeScale(1, 1, pixelPerOneMeter));
-    return finalMatrix;
-}*/
 export function createMapLibreMatrix(
     fovInRadians: number,
     width: number,
@@ -109,7 +59,6 @@ export function createMapLibreMatrix(
     bearingInRadians: number,
     centerX: number,
     centerY: number,
-    worldSize: number,
     pixelPerMeter: number,
     elevation: number,
     offset = { x: 0, y: 0 } // center of perspective offset
@@ -161,7 +110,6 @@ export function createMapLibreMatrix(
 export function createShadowMapMatrix(
     targetX: number,
     targetY: number,
-    worldSize: number,
     pixelPerMeter: number,
     fov: number,
     width: number,
@@ -188,9 +136,127 @@ export function createShadowMapMatrix(
         THREE.MathUtils.degToRad(azimuth),
         targetX,
         targetY,
-        worldSize,
         pixelPerMeter,
         elevation,
         offset
     );
+}
+
+
+export function createShadowMapMatrixOrtho(
+    targetX: number,
+    targetY: number,
+    pixelPerMeter: number,
+    width: number,
+    height: number,
+    near: number,
+    far: number,
+    distance: number,
+    azimuth : number,
+    elevationSun : number,
+    roll : number,
+    offset : {x : number , y : number},
+    elevation: number = 0
+): THREE.Matrix4 {
+    return createSunOrthoShadowMatrix(
+        targetX,
+        targetY,
+        pixelPerMeter,
+        roll,
+        THREE.MathUtils.degToRad(elevationSun),
+        THREE.MathUtils.degToRad(azimuth),
+        width,
+        height,
+        near,
+        far,
+        distance,
+        elevation,
+        offset
+    );
+}
+
+export function createSunOrthoShadowMatrix(
+    centerX: number,
+    centerY: number,
+    pixelPerMeter: number,
+    rollInRadians: number,
+    pitchInRadians: number,
+    bearingInRadians: number,
+    sizeX: number,
+    sizeY: number,
+    nearZ : number,
+    farZ : number,
+    cameraToCenterDistance : number,
+    elevation : number,
+    offset : {x : number , y : number},
+): THREE.Matrix4 {
+    // Match MapLibre main camera order for the world-space part:
+    //   Translate(-center) → ScaleZ(ppm) → Translate(-elev)
+    // Then replace camera rotation/projection with sun direction + ortho.
+    //
+    // Ortho * FlipY * Translate(-dist) * RotX(sunElev) * RotZ(-sunAz) * Translate(-center) * ScaleZ(ppm) * Translate(-elev)
+
+    const m = createOrthoMatrix(sizeX, sizeY, nearZ, farZ, offset);
+    const mat = new THREE.Matrix4();
+    mat.fromArray(m);
+    // Flip Y (MapLibre Y-down → Y-up)
+    mat.multiply(new THREE.Matrix4().makeScale(1, -1, 1));
+    // Push camera back along light direction
+    mat.multiply(new THREE.Matrix4().makeTranslation(0, 0, -cameraToCenterDistance));
+    // Sun rotation (elevation around X, azimuth around Z)
+    mat.multiply(new THREE.Matrix4().makeRotationX(pitchInRadians));
+    mat.multiply(new THREE.Matrix4().makeRotationZ(-bearingInRadians));
+    // Translate to center (same as MapLibre)
+    mat.multiply(new THREE.Matrix4().makeTranslation(-centerX, -centerY, 0));
+    // Scale Z — AFTER translate, BEFORE elevation (same position as MapLibre main camera)
+    mat.multiply(new THREE.Matrix4().makeScale(1, 1, pixelPerMeter));
+    // Elevation offset
+    mat.multiply(new THREE.Matrix4().makeTranslation(0, 0, -elevation));
+    return mat;
+}
+
+export function createOrthoMatrix(
+    width: number,
+    height: number,
+    nearZ: number,
+    farZ: number,
+    offset: { x: number; y: number } = { x: 0, y: 0 }
+): Float64Array {
+    const m = new Float64Array(16);
+    const left   = -width / 2;
+    const right  =  width / 2;
+    const bottom = -height / 2;
+    const top    =  height / 2;
+    const near   = nearZ;
+    const far    = farZ;
+    const lr = 1 / (left - right);
+    const bt = 1 / (bottom - top);
+    const nf = 1 / (near - far);
+    // Row 1
+    m[0]  = -2 * lr;
+    m[1]  = 0;
+    m[2]  = 0;
+    m[3]  = 0;
+    // Row 2
+    m[4]  = 0;
+    m[5]  = -2 * bt;
+    m[6]  = 0;
+    m[7]  = 0;
+    // Row 3
+    m[8]  = 0;
+    m[9]  = 0;
+    m[10] = 2 * nf;
+    m[11] = 0;  
+    // Row 4
+    m[12] = (left + right) * lr;
+    m[13] = (top + bottom) * bt;
+    m[14] = (far + near) * nf;
+    m[15] = 1;
+
+    if (offset.x !== 0 || offset.y !== 0) {
+        m[12] += -offset.x * 2 / width;
+        m[13] +=  offset.y * 2 / height;
+    }
+
+    return m;
 }

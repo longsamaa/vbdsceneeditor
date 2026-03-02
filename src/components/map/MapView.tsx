@@ -129,6 +129,8 @@ function createDefaultMap(map: maplibregl.Map, overlay_layer: OverlayLayer, outl
         shadow: true,
         altitude: sunPos.altitude,
         azimuth: sunPos.azimuth,
+        lat : center.lat,
+        lon : center.lng,
     }
     map.setBearing(sunPos.azimuth - 180);
 
@@ -168,7 +170,6 @@ function createDefaultMap(map: maplibregl.Map, overlay_layer: OverlayLayer, outl
             console.log('pick fail');
         }
     });
-    map4d_layer.setSunPos(sunPos.altitude, sunPos.azimuth);
     map4d_layer.setVectorSource(map4dSource);
     map.addLayer(map4d_layer);
     //create source
@@ -190,10 +191,10 @@ function createDefaultMap(map: maplibregl.Map, overlay_layer: OverlayLayer, outl
         sun: sun_options,
     });
     waterLayer.setVectorSource(customSource);
-    map.addLayer(
+    /*map.addLayer(
         waterLayer,
         'fill-vnairport-index'
-    );
+    );*/
     //create instance layer
     const instanceCustomSource = new CustomVectorSource({
         id: 'test-custom-source',
@@ -252,7 +253,7 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(({
         if (!mapContainer.current) return;
         //create map cache
         editorLayerManager.current = new CustomEditLayerManager();
-        const style_path = import.meta.env.VITE_STYLE_PATH;
+        const style_path = 'style/vbd_style.json'; 
         let canvas_config: WebGLContextAttributesWithType = {};
         const is_high_performance_render = import.meta.env.VITE_HIGH_PERFORMANCE_RENDER;
         if (is_high_performance_render === 'true') {
