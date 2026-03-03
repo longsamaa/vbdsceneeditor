@@ -43,13 +43,13 @@ export class CustomShadowMaterial extends THREE.ShaderMaterial {
                 shadowMap:     { value: shadowMap?.texture ?? null },
                 lightMatrix:   { value: new THREE.Matrix4() },
                 lightDir:      { value: new THREE.Vector3() },
-                shadowMapSize: { value: new THREE.Vector2(4096, 4096) },
+                shadowMapSize: { value: new THREE.Vector2(2048, 2048) },
                 hasShadowMap:  { value: 0 },
                 baseMap:       { value: null as THREE.Texture | null },
                 hasBaseMap:    { value: 0 },
                 baseColor:     { value: new THREE.Color(1, 1, 1) },
-                ambient:       { value: 0.85 },
-                diffuseIntensity: { value: 3.0 },
+                ambient:       { value: 1.0 },
+                diffuseIntensity: { value: 4.0 },
             },
             vertexShader: /* glsl */`
                 uniform mat4 lightMatrix;

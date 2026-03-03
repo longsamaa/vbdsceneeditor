@@ -68,8 +68,8 @@ function createNewEditorLayer(map: maplibregl.Map): EditLayer {
     const center = map.getCenter();
     const sun_options = {
         shadow: true,
-        altitude: 34.4,
-        azimuth: 253.8,
+        altitude: 8.9,
+        azimuth: 261.2,
     }
     const new_edit_layer = new EditLayer({
         id: id,
