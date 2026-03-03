@@ -82,7 +82,7 @@ export class InstanceLayer implements Custom3DTileRenderLayer {
         this.shadowMaterial = new THREE.MeshBasicMaterial({
             color: 0x000000,
             transparent: true,
-            opacity: 0.1,
+            opacity: 0.5,
             depthWrite: false,
             stencilWrite: true,
             stencilFunc: THREE.EqualStencilFunc,

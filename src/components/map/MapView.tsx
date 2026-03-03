@@ -66,11 +66,10 @@ function createOutlineLayer(): OutlineLayer {
 function createNewEditorLayer(map: maplibregl.Map): EditLayer {
     const id = uuid();
     const center = map.getCenter();
-    const sunPos = getSunPosition(center.lat, center.lng);
     const sun_options = {
         shadow: true,
-        altitude: sunPos.altitude,
-        azimuth: sunPos.azimuth,
+        altitude: 34.4,
+        azimuth: 253.8,
     }
     const new_edit_layer = new EditLayer({
         id: id,
@@ -125,14 +124,17 @@ function createDefaultMap(map: maplibregl.Map, overlay_layer: OverlayLayer, outl
     const sourceLayer = "map4d_3dmodels";
     //add overlay layer
     const sunPos = getSunPosition(center.lat, center.lng);
+    const defaultAltitude = 33.7;
+    const defaultAzimuth = 254.1;
     const sun_options = {
         shadow: true,
-        altitude: sunPos.altitude,
-        azimuth: sunPos.azimuth,
+        altitude: defaultAltitude,
+        azimuth: defaultAzimuth,
         lat : center.lat,
         lon : center.lng,
     }
-    map.setBearing(sunPos.azimuth - 180);
+    map.setBearing(defaultAzimuth - 180);
+    map.setPitch(90); 
 
     const map4dSource = new CustomVectorSource({
         id: 'map4d source',
@@ -151,13 +153,7 @@ function createDefaultMap(map: maplibregl.Map, overlay_layer: OverlayLayer, outl
         rootUrl: rootModelUrl,
         minZoom: 14,
         maxZoom: 19,
-        sun: {
-            altitude : sun_options.altitude,
-            azimuth : sun_options.azimuth,
-            shadow : true,
-            lat : center.lat,
-            lon : center.lng,
-        },
+        sun: sun_options,
         onPick: (info) => {
             overlay_layer.setCurrentTileID(info.overScaledTileId);
             overlay_layer.attachGizmoToObject(info.object);
@@ -191,10 +187,10 @@ function createDefaultMap(map: maplibregl.Map, overlay_layer: OverlayLayer, outl
         sun: sun_options,
     });
     waterLayer.setVectorSource(customSource);
-    /*map.addLayer(
+    map.addLayer(
         waterLayer,
         'fill-vnairport-index'
-    );*/
+    );
     //create instance layer
     const instanceCustomSource = new CustomVectorSource({
         id: 'test-custom-source',
@@ -266,7 +262,7 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(({
             container: mapContainer.current,
             style: style_path, // Free demo tiles
             center: center,
-            zoom: 15,
+            zoom: 16.5,
             pitch: 90,
             bearing: 67.97536302882756,
             canvasContextAttributes: canvas_config

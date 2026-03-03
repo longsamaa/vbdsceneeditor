@@ -7,7 +7,7 @@ export class MaplibreShadowMesh extends THREE.Mesh {
     private shadowMatrix = new THREE.Matrix4();
     private meshMatrix = new THREE.Matrix4();
     private tempVector3 = new THREE.Vector3();
-    constructor(mesh: THREE.Mesh, color: number = 0x000000, opacity: number = 0.15) {
+    constructor(mesh: THREE.Mesh, color: number = 0x000000, opacity: number = 0.5) {
         const shadow_mat = new THREE.MeshBasicMaterial({
             color: color,
             transparent: true,

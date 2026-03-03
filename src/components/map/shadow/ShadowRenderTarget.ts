@@ -17,7 +17,12 @@ export class ShadowRenderTarget {
     beginRenderShadowPass(renderer: THREE.WebGLRenderer): void {
         if (!this.shadowTarget) throw new Error('disposed');
         renderer.setRenderTarget(this.shadowTarget);
+        // Clear shadow map với depth = 1.0 (xa nhất) để texel trống không gây viền đen
+        const oldClearColor = renderer.getClearColor(new THREE.Color());
+        const oldClearAlpha = renderer.getClearAlpha();
+        renderer.setClearColor(new THREE.Color(1, 1, 1), 1);
         renderer.clear(true, true, false);
+        renderer.setClearColor(oldClearColor, oldClearAlpha);
     }
 
     endRenderShadowPass(renderer: THREE.WebGLRenderer): void {

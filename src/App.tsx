@@ -12,8 +12,8 @@ function App() {
     return (
         <div className="App">
             <MapView
-                center={[106.72917030411851, 10.797981541869406]}
-                zoom={16}
+                center={[106.69711256143003, 10.770635804703028]}
+                zoom={17}
                 ref={mapHandleRef}
             />
             <TransformToolbar

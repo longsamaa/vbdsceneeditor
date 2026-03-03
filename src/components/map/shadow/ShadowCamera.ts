@@ -1,7 +1,4 @@
 import * as THREE from 'three'
-import {projectToWorldCoordinates} from "../convert/map_convert.ts";
-import type {LatLon} from "../Interface.ts";
-import type {CustomRenderMethodInput, UnwrappedTileID} from "maplibre-gl";
 
 export function perspective(out: THREE.Matrix4,
                             fovy: number,
@@ -20,7 +17,7 @@ export function perspective(out: THREE.Matrix4,
 }
 
 export function calculateTileMatrixThree(
-    unwrappedTileID: UnwrappedTileID,
+    unwrappedTileID: { canonical: { z: number; x: number; y: number }; wrap: number },
     worldSize: number,
     EXTENT : number = 8192,
 ): THREE.Matrix4 {

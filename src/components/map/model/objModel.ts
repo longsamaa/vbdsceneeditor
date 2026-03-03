@@ -3,6 +3,7 @@ import {OBJLoader} from 'three/examples/jsm/loaders/OBJLoader.js';
 import type {LightGroup, ModelData} from '../Interface.ts'
 import {tileLocalToLatLon} from '../convert/map_convert'
 import {GLTFLoader} from 'three/examples/jsm/loaders/GLTFLoader.js';
+import {CustomShadowMaterial} from '../shadow/CustomShadowMaterial.ts';
 
 
 export function createYupToZUpMatrix(): THREE.Matrix4 {
@@ -143,15 +144,6 @@ export function prepareModelForRender(model: THREE.Object3D, setDefaultMat: bool
             reverseFaceWinding(child.geometry);
             if (setDefaultMat) {
                 (child as THREE.Mesh).material = default_mat;
-            } else {
-               /* const mat = (child as THREE.Mesh).material;
-                if (Array.isArray(mat)) {
-                    for (const m of mat) {
-                        m.side = THREE.DoubleSide;
-                    }
-                } else {
-                    mat.side = THREE.DoubleSide;
-                }*/
             }
         }
     });
