@@ -22,7 +22,7 @@ import {
 import {parseLayerTileInfo} from '../tile/tile.ts';
 import {createBuildingGroup, createLightGroup, createShadowGroup, transformModel} from '../model/objModel.ts'
 import {calculateSunDirectionMaplibre} from '../shadow/ShadowHelper.ts'
-import {MaplibreShadowMesh} from "../shadow/ShadowGeometry.ts";
+import {MaplibreShadowMesh, GroundShadowMesh} from "../shadow/ShadowGeometry.ts";
 import {CustomVectorSource} from "../source/CustomVectorSource.ts"
 import {ModelFetch} from "./ModelFetch.ts";
 import {
@@ -99,10 +99,11 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer {
     private raycaster = new THREE.Raycaster();
     // --- Reusable objects (avoid per-frame allocations) ---
     private readonly _depthMat = new ShadowDepthMaterial();
-    private readonly _shadowMat = new ShadowLitMaterial(null);
     private readonly _lightMatrices = new Map<string, THREE.Matrix4>();
     private readonly _tmpMatrix = new THREE.Matrix4();
     private readonly _tmpLightDir = new THREE.Vector3();
+    private _visibleTiles: OverscaledTileID[] = [];
+    private _currentZoom = 0;
 
     constructor(opts: Map4DModelsLayerOptions & { onPick?: (info: PickHit) => void } & {
         onPickfail?: () => void
@@ -203,18 +204,18 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer {
         if (!this.map || !this.vectorSource) {
             return;
         }
-        const zoom = clampZoom(
+        this._currentZoom = clampZoom(
             this.vectorSource.minZoom,
             this.vectorSource.maxZoom,
             Math.round(this.map.getZoom())
         );
-        const visibleTiles = this.map.coveringTiles({
+        this._visibleTiles = this.map.coveringTiles({
             tileSize: this.tileSize,
-            minzoom: zoom,
-            maxzoom: zoom,
+            minzoom: this._currentZoom,
+            maxzoom: this._currentZoom,
             roundZoom: true,
         });
-        for (const tile of visibleTiles) {
+        for (const tile of this._visibleTiles) {
             const vectorTile = this.vectorSource.getTile(tile, {
                 build_triangle: true,
             });
@@ -385,13 +386,10 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer {
                 applyGlobeMatrix: this.applyGlobeMatrix,
             });
             const light_matrix = this._lightMatrices.get(tile_key);
-            this._shadowMat.update(light_matrix, this.shadowRenderPass?.getRenderTarget(), this._tmpLightDir);
-            // Swap materials per-mesh to inject original texture into shadow shader
             this.updateShadowPass(tileInfo.sceneTile,light_matrix,this.shadowRenderPass?.getRenderTarget(), this._tmpLightDir);
             this.camera.projectionMatrix.fromArray(projectionData.mainMatrix);
             this.updateShadow(tileInfo.sceneTile);
             this.renderer.render(tileInfo.sceneTile, this.camera);
-            this.restoreOriginalMaterial(tileInfo.sceneTile);
         }
     }
 
@@ -402,18 +400,9 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer {
             return;
         }
         if (this.map.getZoom() < this.minZoom) return;
-        const zoom = clampZoom(this.vectorSource.minZoom,
-            this.vectorSource.maxZoom,
-            Math.round(this.map.getZoom()));
-        const visibleTiles = this.map.coveringTiles({
-            tileSize: this.tileSize,
-            minzoom: zoom,
-            maxzoom: zoom,
-            roundZoom: true,
-        });
         const tr = this.map.transform;
-        this.shadowPass(tr,visibleTiles); 
-        this.mainPass(tr,visibleTiles); 
+        this.shadowPass(tr, this._visibleTiles);
+        this.mainPass(tr, this._visibleTiles);
     }
 
     /** --------- Picking --------- */
@@ -528,9 +517,11 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer {
         }
         /*console.log(sun_dir);*/
         scene.traverse((child) => {
-            if (child instanceof MaplibreShadowMesh) {
+            if (child instanceof GroundShadowMesh) {
                 const shadow_scale_z = child.userData.scale_unit;
-                //(child as MaplibreShadowMesh).update(new THREE.Vector3(sun_dir.x, sun_dir.y, -sun_dir.z / shadow_scale_z));
+                (child as GroundShadowMesh).update(-sun_dir.x, -sun_dir.y, sun_dir.z / shadow_scale_z);
+            } else if (child instanceof MaplibreShadowMesh) {
+                const shadow_scale_z = child.userData.scale_unit;
                 (child as MaplibreShadowMesh).update(-sun_dir.x, -sun_dir.y, sun_dir.z / shadow_scale_z);
             }
         });
@@ -543,26 +534,13 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer {
         lightDir: THREE.Vector3
     ): void {
         scene.traverse((child) => {
-            if (child instanceof THREE.Mesh) {
-                child.userData._origMat = child.material;
-                const shadowMat = child.userData.shadowMaterial;
-                if (shadowMat instanceof ShadowLitMaterial) {
-                    shadowMat.update(lightMatrix, shadowMap, lightDir);
-                    child.material = shadowMat;
-                }
+            if (child instanceof GroundShadowMesh) {
+                child.getGroundShadowMaterial().update(lightMatrix, shadowMap);
+            } else if (child instanceof THREE.Mesh && child.material instanceof ShadowLitMaterial) {
+                child.material.update(lightMatrix, shadowMap, lightDir);
             }
         });
     }
-
-    private restoreOriginalMaterial(scene: THREE.Scene): void {
-        scene.traverse((child) => {
-            if (child instanceof THREE.Mesh && child.userData._origMat) {
-                child.material = child.userData._origMat;
-                child.onBeforeRender = () => {};
-                delete child.userData._origMat;
-            }
-        });
-    }  
 
     private populateBuildingGroup(overScaledTile: OverscaledTileID, tile: TileCacheEntry) {
         if (!tile.sceneTile || !tile.objects || !overScaledTile || tile.isFullObject) {
@@ -638,27 +616,18 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer {
                             shadowMat.uniforms.baseColor.value.copy(origMat.color);
                         }
                     }
-                    child.userData.shadowMaterial = shadowMat;
-
+                    child.material = shadowMat;
                     // Skip shadow cho model dẹt (z height quá nhỏ)
-                    const box = new THREE.Box3().setFromBufferAttribute(
-                        child.geometry.getAttribute('position') as THREE.BufferAttribute
-                    );
-                    const zHeight = box.max.z - box.min.z;
-                    if (zHeight > 1.0) {
-                        const object_shadow = new MaplibreShadowMesh(child);
-                        object_shadow.userData = {
-                            scale_unit: scaleUnit,
-                        };
-                        object_shadow.matrixAutoUpdate = false;
-                        shadow_group?.add(object_shadow);
-                    }
+                    const object_shadow = new GroundShadowMesh(child);
+                    object_shadow.userData = {
+                        scale_unit: scaleUnit,
+                    };
+                    object_shadow.matrixAutoUpdate = false;
+                    shadow_group?.add(object_shadow);
                 }
             });
+            cloneObj3d.traverse(obj => { obj.frustumCulled = false; });
             building_group.add(cloneObj3d);
-            tile.sceneTile.traverse(obj => {
-                obj.frustumCulled = false; 
-            });
             this.map?.triggerRepaint();
         }
     }
