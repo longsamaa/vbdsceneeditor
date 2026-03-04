@@ -49,7 +49,7 @@ export class ShadowLitMaterial extends THREE.ShaderMaterial {
                 hasBaseMap:    { value: 0 },
                 baseColor:     { value: new THREE.Color(1, 1, 1) },
                 ambient:       { value: 1.0 },
-                diffuseIntensity: { value: 3.0 },
+                diffuseIntensity: { value: 2.0 },
                 uOpacity:      { value: 1.0 },
                 shadowStrength: { value: 0.5 },
                 lightColor:    { value: new THREE.Color(1.0, 0.96, 0.88) },
@@ -72,7 +72,7 @@ export class ShadowLitMaterial extends THREE.ShaderMaterial {
             `,
             fragmentShader: /* glsl */`
                 uniform sampler2D shadowMap;
-                uniform sampler2D baseMap;
+                uniform sampler2D baseMap; 
                 uniform int hasBaseMap;
                 uniform int hasShadowMap;
                 uniform vec3 baseColor;
