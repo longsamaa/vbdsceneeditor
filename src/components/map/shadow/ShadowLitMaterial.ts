@@ -32,7 +32,7 @@ export class ShadowDepthMaterial extends THREE.ShaderMaterial {
     }
 }
 // Shadow material that samples the model's original texture and applies shadow + lighting
-export class CustomShadowMaterial extends THREE.ShaderMaterial {
+export class ShadowLitMaterial extends THREE.ShaderMaterial {
     constructor(shadowMap: THREE.WebGLRenderTarget | null = null) {
         super({
             side: THREE.FrontSide,
@@ -43,13 +43,16 @@ export class CustomShadowMaterial extends THREE.ShaderMaterial {
                 shadowMap:     { value: shadowMap?.texture ?? null },
                 lightMatrix:   { value: new THREE.Matrix4() },
                 lightDir:      { value: new THREE.Vector3() },
-                shadowMapSize: { value: new THREE.Vector2(2048, 2048) },
+                shadowMapSize: { value: new THREE.Vector2(8192, 8192) },
                 hasShadowMap:  { value: 0 },
                 baseMap:       { value: null as THREE.Texture | null },
                 hasBaseMap:    { value: 0 },
                 baseColor:     { value: new THREE.Color(1, 1, 1) },
                 ambient:       { value: 1.0 },
-                diffuseIntensity: { value: 4.0 },
+                diffuseIntensity: { value: 3.5 },
+                uOpacity:      { value: 1.0 },
+                shadowStrength: { value: 0.4 },
+                lightColor:    { value: new THREE.Color(1.0, 0.96, 0.88) },
             },
             vertexShader: /* glsl */`
                 uniform mat4 lightMatrix;
@@ -75,6 +78,9 @@ export class CustomShadowMaterial extends THREE.ShaderMaterial {
                 uniform vec2 shadowMapSize;
                 uniform float ambient;
                 uniform float diffuseIntensity;
+                uniform float uOpacity;
+                uniform float shadowStrength;
+                uniform vec3 lightColor;
                 in vec3 vLightNDC;
                 in vec2 vUv;
                 varying vec3 vNormal;
@@ -90,8 +96,8 @@ export class CustomShadowMaterial extends THREE.ShaderMaterial {
                     float diffuse = clamp(NdotL, 0.0, 1.0);
                     // No shadow map → just albedo + N·L diffuse lighting
                     if (hasShadowMap == 0) {
-                        float lighting = ambient + diffuse * diffuseIntensity;
-                        gl_FragColor = vec4(albedo * lighting, 1.0);
+                        vec3 lit = albedo * ambient + albedo * lightColor * diffuse * diffuseIntensity;
+                        gl_FragColor = vec4(lit, uOpacity);
                         return;
                     }
                     vec3 projCoords = vLightNDC * 0.5 + 0.5;
@@ -99,8 +105,8 @@ export class CustomShadowMaterial extends THREE.ShaderMaterial {
                     if (projCoords.x < 0.0 || projCoords.x > 1.0 ||
                         projCoords.y < 0.0 || projCoords.y > 1.0 ||
                         projCoords.z > 1.0) {
-                        float lighting = ambient + diffuse * diffuseIntensity;
-                        gl_FragColor = vec4(albedo * lighting, 1.0);
+                        vec3 lit = albedo * ambient + albedo * lightColor * diffuse * diffuseIntensity;
+                        gl_FragColor = vec4(lit, uOpacity);
                         return;
                     }
                     float bias = 0.00005 + 0.00001 * (1.0 - diffuse);
@@ -115,9 +121,9 @@ export class CustomShadowMaterial extends THREE.ShaderMaterial {
                         }
                     }
                     shadow /= 49.0;
-                    float shadowAmbient = mix(ambient * 0.85, ambient, shadow);
-                    float lighting = shadowAmbient + diffuse * shadow * diffuseIntensity;
-                    gl_FragColor = vec4(albedo * lighting, 1.0);
+                    float shadowAmbient = mix(ambient * shadowStrength, ambient, shadow);
+                    vec3 lit = albedo * shadowAmbient + albedo * lightColor * diffuse * shadow * diffuseIntensity;
+                    gl_FragColor = vec4(lit, uOpacity);
                 }
             `,
         });
@@ -137,6 +143,19 @@ export class CustomShadowMaterial extends THREE.ShaderMaterial {
         this.uniforms.lightMatrix.value.copy(lightMatrix);
         this.uniforms.shadowMap.value = shadowMap.texture;
         this.uniforms.shadowMapSize.value.set(shadowMap.width, shadowMap.height);
+    }
+
+    setOpacity(opacity: number): void {
+        this.uniforms.uOpacity.value = opacity;
+        this.transparent = opacity < 1.0;
+    }
+
+    setShadowStrength(strength: number): void {
+        this.uniforms.shadowStrength.value = strength;
+    }
+
+    setLightColor(color: THREE.Color): void {
+        this.uniforms.lightColor.value.copy(color);
     }
 
     setLighting(ambient: number, diffuseIntensity: number): void {

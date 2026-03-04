@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 import type {CustomLayerInterface} from 'maplibre-gl';
 import {OverscaledTileID} from 'maplibre-gl';
-import type {CustomShadowMaterial} from './shadow/CustomShadowMaterial';
+import type {ShadowLitMaterial} from './shadow/ShadowLitMaterial';
 
 export interface LocalCoordinate {
     tileX: number,
@@ -30,7 +30,7 @@ export interface ObjectInfo {
     mixer: THREE.AnimationMixer | null;
     actions: THREE.AnimationAction[] | null;
     animations: THREE.AnimationClip[] | null;
-    shadowMaterial?: CustomShadowMaterial | null;
+    shadowMaterial?: ShadowLitMaterial | null;
 }
 export interface ModelData {
     object3d?: THREE.Object3D | null;

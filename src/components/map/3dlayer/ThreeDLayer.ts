@@ -30,7 +30,7 @@ import {
     createShadowMapMatrixOrtho,
 } from "../shadow/ShadowCamera.ts";
 import {ShadowRenderTarget} from "../shadow/ShadowRenderTarget.ts";
-import {CustomShadowMaterial, ShadowDepthMaterial} from "../shadow/CustomShadowMaterial.ts";
+import {ShadowLitMaterial, ShadowDepthMaterial} from "../shadow/ShadowLitMaterial.ts";
 
 
 /** Config cho layer */
@@ -99,7 +99,7 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer {
     private raycaster = new THREE.Raycaster();
     // --- Reusable objects (avoid per-frame allocations) ---
     private readonly _depthMat = new ShadowDepthMaterial();
-    private readonly _shadowMat = new CustomShadowMaterial(null);
+    private readonly _shadowMat = new ShadowLitMaterial(null);
     private readonly _lightMatrices = new Map<string, THREE.Matrix4>();
     private readonly _tmpMatrix = new THREE.Matrix4();
     private readonly _tmpLightDir = new THREE.Vector3();
@@ -180,7 +180,7 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer {
 
         // Fixed near/far/distance for the light camera (world-pixel units).
         const shadowFar = tr.cameraToCenterDistance * 5;
-        const shadowNear = 1.0;
+        const shadowNear = 0.1;
         const shadowDistance = tr.cameraToCenterDistance * 2;
 
          this.shadowMatrix = createShadowMapMatrixOrtho(
@@ -304,7 +304,7 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer {
         });
         this.renderer.autoClear = false;
         this.renderer.localClippingEnabled = true;
-        this.shadowRenderPass = new ShadowRenderTarget(4096);
+        this.shadowRenderPass = new ShadowRenderTarget(8192);
         // thêm sự kiện pick
         map.on('click', this.handleClick);
     }
@@ -543,13 +543,13 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer {
         lightDir: THREE.Vector3
     ): void {
         scene.traverse((child) => {
-            if (child instanceof THREE.Mesh && !(child instanceof MaplibreShadowMesh)) {
+            if (child instanceof THREE.Mesh) {
                 child.userData._origMat = child.material;
                 const shadowMat = child.userData.shadowMaterial;
-                if (shadowMat instanceof CustomShadowMaterial) {
+                if (shadowMat instanceof ShadowLitMaterial) {
                     shadowMat.update(lightMatrix, shadowMap, lightDir);
                     child.material = shadowMat;
-                } 
+                }
             }
         });
     }
@@ -626,9 +626,9 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer {
             };
             cloneObj3d.traverse((child) => {
                 if (child instanceof THREE.Mesh) {
-                    // Tạo riêng CustomShadowMaterial cho mesh clone, copy baseMap và baseColor từ mat gốc
+                    // Tạo riêng ShadowLitMaterial cho mesh clone, copy baseMap và baseColor từ mat gốc
                     const origMat = child.material as THREE.MeshStandardMaterial | THREE.MeshBasicMaterial | THREE.MeshPhongMaterial;
-                    const shadowMat = new CustomShadowMaterial();
+                    const shadowMat = new ShadowLitMaterial();
                     if (origMat) {
                         if (origMat.map) {
                             shadowMat.uniforms.baseMap.value = origMat.map;
@@ -640,12 +640,19 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer {
                     }
                     child.userData.shadowMaterial = shadowMat;
 
-                    const object_shadow = new MaplibreShadowMesh(child);
-                    object_shadow.userData = {
-                        scale_unit: scaleUnit,
-                    };
-                    object_shadow.matrixAutoUpdate = false;
-                    shadow_group?.add(object_shadow);
+                    // Skip shadow cho model dẹt (z height quá nhỏ)
+                    const box = new THREE.Box3().setFromBufferAttribute(
+                        child.geometry.getAttribute('position') as THREE.BufferAttribute
+                    );
+                    const zHeight = box.max.z - box.min.z;
+                    if (zHeight > 1.0) {
+                        const object_shadow = new MaplibreShadowMesh(child);
+                        object_shadow.userData = {
+                            scale_unit: scaleUnit,
+                        };
+                        object_shadow.matrixAutoUpdate = false;
+                        shadow_group?.add(object_shadow);
+                    }
                 }
             });
             building_group.add(cloneObj3d);

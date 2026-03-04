@@ -124,8 +124,8 @@ function createDefaultMap(map: maplibregl.Map, overlay_layer: OverlayLayer, outl
     const sourceLayer = "map4d_3dmodels";
     //add overlay layer
     const sunPos = getSunPosition(center.lat, center.lng);
-    const defaultAltitude = 33.7;
-    const defaultAzimuth = 254.1;
+    const defaultAltitude =  sunPos.altitude;
+    const defaultAzimuth = sunPos.azimuth;
     const sun_options = {
         shadow: true,
         altitude: defaultAltitude,

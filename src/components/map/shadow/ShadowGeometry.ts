@@ -10,6 +10,9 @@ export class MaplibreShadowMesh extends THREE.Mesh {
     constructor(mesh: THREE.Mesh, color: number = 0x000000, opacity: number = 0.5) {
         const shadow_mat = new THREE.MeshBasicMaterial({
             color: color,
+            polygonOffset: true,
+            polygonOffsetFactor: 4,
+            polygonOffsetUnits: 4,
             transparent: true,
             opacity: opacity,
             depthWrite: false,
@@ -21,6 +24,10 @@ export class MaplibreShadowMesh extends THREE.Mesh {
         });
         super(mesh.geometry, shadow_mat);
         this.meshMatrix = mesh.matrixWorld;
+        this.frustumCulled = false;
+        // Clip shadow theo bounding box XY của object — cắt phần nằm trong footprint
+        mesh.geometry.computeBoundingBox();
+        const box = mesh.geometry.boundingBox;
     }
 
     update(sunDirX: number, sunDirY: number, sunDirZ: number, planeZ: number = 0) {

@@ -3,7 +3,7 @@ import {OBJLoader} from 'three/examples/jsm/loaders/OBJLoader.js';
 import type {LightGroup, ModelData} from '../Interface.ts'
 import {tileLocalToLatLon} from '../convert/map_convert'
 import {GLTFLoader} from 'three/examples/jsm/loaders/GLTFLoader.js';
-import {CustomShadowMaterial} from '../shadow/CustomShadowMaterial.ts';
+
 
 
 export function createYupToZUpMatrix(): THREE.Matrix4 {
