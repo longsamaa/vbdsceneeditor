@@ -9,6 +9,7 @@ import {decomposeObject,objectEnableClippingPlaneZ} from '../model/objModel';
 import type {TransformControlsMode} from 'three/examples/jsm/controls/TransformControls.js';
 import * as THREE from 'three';
 import {MaplibreShadowMesh} from "../shadow/ShadowGeometry";
+import {getSharedRenderer} from "../SharedRenderer";
 
 export type OverlayLayerOptions = {
     id: string;
@@ -216,16 +217,10 @@ export class OverlayLayer implements CustomLayerInterface {
         this.camera = new THREE.PerspectiveCamera();
         this.camera.matrixAutoUpdate = false;
         this.scene = new THREE.Scene;
-        this.renderer = new THREE.WebGLRenderer({
-            canvas: map.getCanvas(),
-            context: gl,
-            antialias: true,
-        });
-        this.renderer.autoClear = false;
+        this.renderer = getSharedRenderer(map.getCanvas(), gl);
     }
 
     onRemove(): void {
-        this.renderer?.dispose();
         this.scene = null;
         this.renderer = null;
         this.camera = null;

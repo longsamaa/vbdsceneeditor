@@ -32,6 +32,7 @@ import {
 } from "../shadow/ShadowCamera.ts";
 import {ShadowRenderTarget} from "../shadow/ShadowRenderTarget.ts";
 import {ShadowLitMaterial, ShadowDepthMaterial} from "../shadow/ShadowLitMaterial.ts";
+import {getSharedRenderer} from "../SharedRenderer.ts";
 
 
 /** Config cho layer */
@@ -298,15 +299,7 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer {
         this.map = map;
         this.camera = new THREE.Camera();
         this.shadow_camera = new THREE.Camera();
-        this.renderer = new THREE.WebGLRenderer({
-            canvas: map.getCanvas(),
-            context: gl,
-            antialias: true,
-            alpha: true,
-            stencil: true,
-        });
-        this.renderer.autoClear = false;
-        this.renderer.localClippingEnabled = true;
+        this.renderer = getSharedRenderer(map.getCanvas(), gl);
         this.shadowRenderPass = new ShadowRenderTarget(8192);
         // thêm sự kiện pick
         map.on('click', this.handleClick);
@@ -346,7 +339,6 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer {
 
     onRemove(): void {
         this.map?.off('click', this.handleClick);
-        this.renderer?.dispose();
         this.renderer = null;
         this.camera = null;
         this.map = null;
@@ -622,7 +614,7 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer {
                 if (child instanceof THREE.Mesh) {
                     applyShadowLitMaterial(child);
                     // Skip shadow cho model dẹt (z height quá nhỏ)
-                    const object_shadow = new GroundShadowMesh(child);
+                    const object_shadow = new MaplibreShadowMesh(child);
                     object_shadow.userData = {
                         scale_unit: scaleUnit,
                     };

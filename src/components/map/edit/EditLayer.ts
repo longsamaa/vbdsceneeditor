@@ -16,6 +16,7 @@ import type {
 import * as THREE from 'three';
 import {MaplibreShadowMesh} from "../shadow/ShadowGeometry.ts";
 import {calculateSunDirectionMaplibre} from "../shadow/ShadowHelper.ts";
+import {getSharedRenderer} from "../SharedRenderer.ts";
 
 export type EditorLayerOpts = {
     id: string;
@@ -121,20 +122,12 @@ export class EditLayer implements Custom3DTileRenderLayer {
         this.map = map;
         this.camera = new THREE.Camera();
         this.camera.matrixAutoUpdate = false;
-        this.renderer = new THREE.WebGLRenderer({
-            canvas: map.getCanvas(),
-            context: gl,
-            antialias: true,
-            stencil: true,
-        });
+        this.renderer = getSharedRenderer(map.getCanvas(), gl);
         this.clock = new THREE.Clock();
-        this.renderer.autoClear = false;
-        this.renderer.localClippingEnabled = true;
         map.on('click', this.handleClick);
     }
 
     onRemove(): void {
-        this.renderer?.dispose();
         this.renderer = null;
         this.camera = null;
         this.map = null;

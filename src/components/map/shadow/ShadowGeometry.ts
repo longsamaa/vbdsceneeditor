@@ -9,7 +9,7 @@ export class MaplibreShadowMesh extends THREE.Mesh {
     private meshMatrix = new THREE.Matrix4();
     private scaleMatrix = new THREE.Matrix4();
     private tempVector3 = new THREE.Vector3();
-    constructor(mesh: THREE.Mesh, color: number = 0x000000, opacity: number = 0.5) {
+    constructor(mesh: THREE.Mesh, color: number = 0x000000, opacity: number = 0.4) {
         const groundShadowMat = new THREE.MeshBasicMaterial({
             color: color,
             polygonOffset: true,

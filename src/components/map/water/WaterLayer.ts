@@ -10,6 +10,7 @@ import type {Feature, GeoJsonProperties, MultiPolygon, Polygon, Position} from '
 import {createWaterMaterial} from "./WaterMaterial.ts";
 import * as turf from "@turf/turf";
 import {calculateSunDirectionMaplibre} from "../shadow/ShadowHelper.ts";
+import {getSharedRenderer} from "../SharedRenderer.ts";
 
 export type WaterLayerOpts = {
     id: string;
@@ -86,12 +87,7 @@ export class WaterLayer implements Custom3DTileRenderLayer {
         this.map = map;
         this.camera = new THREE.Camera();
         this.camera.matrixAutoUpdate = false;
-        this.renderer = new THREE.WebGLRenderer({
-            canvas: map.getCanvas(),
-            context: gl,
-        });
-        this.renderer.autoClear = false;
-        this.renderer.localClippingEnabled = true;
+        this.renderer = getSharedRenderer(map.getCanvas(), gl);
         this.mainScene = new THREE.Scene();
         this.map.on('moveend', () => {
             this.isRebuildWaterGeometry = true;
@@ -101,7 +97,6 @@ export class WaterLayer implements Custom3DTileRenderLayer {
     }
 
     onRemove(): void {
-        this.renderer?.dispose();
         this.renderer = null;
         this.camera = null;
         this.map = null;

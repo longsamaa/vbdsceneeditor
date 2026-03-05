@@ -51,7 +51,7 @@ export class ShadowLitMaterial extends THREE.ShaderMaterial {
                 hasAlphaMap:   { value: 0 },
                 alphaTest:     { value: 0.0 },
                 baseColor:     { value: new THREE.Color(1, 1, 1) },
-                colorLift:     { value: 0.0 },
+                colorLift:     { value: 0.1 },
                 ambient:       { value: 0.8 },
                 diffuseIntensity: { value: 0.8 },
                 uOpacity:      { value: 1.0 },
@@ -239,9 +239,8 @@ export class GroundShadowMaterial extends THREE.ShaderMaterial {
     constructor(shadowMap: THREE.WebGLRenderTarget | null = null) {
         super({
             side: THREE.DoubleSide,
-            transparent: false,
+            transparent: true,
             depthWrite: false,
-            blending: THREE.MultiplyBlending,
             polygonOffset: true,
             polygonOffsetFactor: 4,
             polygonOffsetUnits: 4,
@@ -280,21 +279,17 @@ export class GroundShadowMaterial extends THREE.ShaderMaterial {
                 in vec3 vLightNDC;
                 void main() {
                     if (hasShadowMap == 0) {
-                        gl_FragColor = vec4(1.0);
-                        return;
+                        discard;
                     }
                     vec3 projCoords = vLightNDC * 0.5 + 0.5;
-                    // outside shadow map → no shadow (multiply by 1.0 = no change)
                     if (projCoords.x < 0.0 || projCoords.x > 1.0 ||
                         projCoords.y < 0.0 || projCoords.y > 1.0 ||
                         projCoords.z > 1.0) {
-                        gl_FragColor = vec4(1.0);
-                        return;
+                        discard;
                     }
                     float current = projCoords.z;
                     float bias = biasBase + biasSlope;
                     vec2 texelSize = 1.0 / shadowMapSize;
-                    // PCF 7x7 soft shadow (49 samples)
                     float shadow = 0.0;
                     for (int x = -3; x <= 3; x++) {
                         for (int y = -3; y <= 3; y++) {
@@ -303,9 +298,9 @@ export class GroundShadowMaterial extends THREE.ShaderMaterial {
                         }
                     }
                     shadow /= 49.0;
-                    // brightness = 1.0 (no shadow) to (1 - strength) (full shadow)
-                    float brightness = 1.0 - shadow * shadowStrength * uOpacity;
-                    gl_FragColor = vec4(vec3(brightness), 1.0);
+                    float alpha = shadow * shadowStrength * uOpacity;
+                    if (alpha < 0.01) discard;
+                    gl_FragColor = vec4(0.0, 0.0, 0.0, alpha);
                 }
             `,
         });

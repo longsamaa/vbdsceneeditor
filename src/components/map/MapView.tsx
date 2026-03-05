@@ -124,12 +124,12 @@ function createDefaultMap(map: maplibregl.Map, overlay_layer: OverlayLayer, outl
     const sourceLayer = "map4d_3dmodels";
     //add overlay layer
     const sunPos = getSunPosition(center.lat, center.lng);
-    const defaultAltitude = 42.9;
-    const defaultAzimuth = 250.3;
+    const defaultAltitude = 55.0;
+    const defaultAzimuth = 232.5;
     const sun_options = {
         shadow: true,
-        altitude: sunPos.altitude,
-        azimuth: sunPos.azimuth,
+        altitude: defaultAltitude,
+        azimuth: defaultAzimuth,
         lat : center.lat,
         lon : center.lng,
     }
@@ -268,7 +268,7 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(({
             bearing: 67.97536302882756,
             canvasContextAttributes: canvas_config
         });
-        map.current._showTileBoundaries = true;
+        //map.current._showTileBoundaries = true;
         // Thêm controls
         addControlMaplibre(map.current);
         // Tao overlay truoc

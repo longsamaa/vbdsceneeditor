@@ -16,6 +16,7 @@ import {CustomVectorSource} from "../source/CustomVectorSource.ts"
 import {buildShadowMatrix, calculateSunDirectionMaplibre} from "../shadow/ShadowHelper.ts";
 import InstancedGroupMesh from "./InstancedGroupMesh.ts";
 import {ShadowLitMaterial, InstanceShadowMaterial} from "../shadow/ShadowLitMaterial.ts"
+import {getSharedRenderer} from "../SharedRenderer.ts";
 import {
     calculateTileMatrixThree,
 } from "../shadow/ShadowCamera.ts";
@@ -32,6 +33,8 @@ export type InstanceLayerOpts = {
 
 export type DataTileInfoForInstanceLayer = {
     sceneTile: THREE.Scene;
+    shadowLitMaterials: ShadowLitMaterial[];
+    instanceShadowMaterials: InstanceShadowMaterial[];
 }
 
 export class InstanceLayer implements Custom3DTileRenderLayer {
@@ -47,7 +50,7 @@ export class InstanceLayer implements Custom3DTileRenderLayer {
     private vectorSource: CustomVectorSource | null = null;
     private tileCache: Map<string, DataTileInfoForInstanceLayer> = new Map<string, DataTileInfoForInstanceLayer>();
     private objectUrls: string[];
-    private shadowMaterial: InstanceShadowMaterial | null = null;
+    private shadowMaterial: THREE.Material | null = null;
     private mapObj3d: Map<string, THREE.Object3D> = new Map<string, THREE.Object3D>();
     //private raycaster = new THREE.Raycaster();
     private sun: SunParamater | null | undefined;
@@ -57,7 +60,6 @@ export class InstanceLayer implements Custom3DTileRenderLayer {
     private applyGlobeMatrix: boolean | false = false;
     private light: LightGroup | null = null;
     private currentScene: THREE.Scene | null = null;
-    private baseMatrix = new THREE.Matrix4();
     private shadowMatrix = new THREE.Matrix4();
     private finalMatrix = new THREE.Matrix4();
     private sunVector = new THREE.Vector3();
@@ -66,6 +68,8 @@ export class InstanceLayer implements Custom3DTileRenderLayer {
     //shadow-pass object //
     private readonly _lightMatrices = new Map<string, THREE.Matrix4>();
     private readonly _tmpMatrix = new THREE.Matrix4();
+    private readonly _projMatrix = new THREE.Matrix4();
+    private _visibleTiles: OverscaledTileID[] = [];
     
     constructor(opts: InstanceLayerOpts & { onPick?: (info: PickHit) => void } & { onPickfail?: () => void }) {
         this.id = opts.id;
@@ -87,7 +91,20 @@ export class InstanceLayer implements Custom3DTileRenderLayer {
         if (this.sun) {
             this.light = createLightGroup(dirLight);
         }
-        this.shadowMaterial = new InstanceShadowMaterial();
+        this.shadowMaterial = new THREE.MeshBasicMaterial({
+                    color: 0x000000,
+                    polygonOffset: true,
+                    polygonOffsetFactor: 4,
+                    polygonOffsetUnits: 4,
+                    transparent: true,
+                    opacity: 0.4,
+                    depthWrite: false,
+                    stencilWrite: true,
+                    stencilFunc: THREE.EqualStencilFunc,
+                    stencilRef: 0,
+                    stencilZPass: THREE.IncrementStencilOp,
+                    side: THREE.DoubleSide
+                });
         this.minZoom = opts.minZoom ?? 0;
         this.maxZoom = opts.maxZoom ?? 19;
     }
@@ -96,13 +113,7 @@ export class InstanceLayer implements Custom3DTileRenderLayer {
         this.map = map;
         this.camera = new THREE.Camera();
         this.camera.matrixAutoUpdate = false;
-        this.renderer = new THREE.WebGLRenderer({
-            canvas: map.getCanvas(),
-            context: gl,
-            antialias: true,
-            stencil: true,
-        });
-        this.renderer.autoClear = false;
+        this.renderer = getSharedRenderer(map.getCanvas(), gl);
         map.on('click', this.handleClick);
         //load glb file
         this.objectUrls.forEach((url) => {
@@ -125,7 +136,6 @@ export class InstanceLayer implements Custom3DTileRenderLayer {
     }
 
     onRemove(): void {
-        this.renderer?.dispose();
         this.renderer = null;
         this.camera = null;
         this.map = null;
@@ -188,7 +198,7 @@ export class InstanceLayer implements Custom3DTileRenderLayer {
             Math.round(this.map.getZoom())
         );
 
-        const visibleTiles = this.map.coveringTiles({
+        this._visibleTiles = this.map.coveringTiles({
             tileSize: this.tileSize,
             minzoom: zoom,
             maxzoom: zoom,
@@ -196,7 +206,7 @@ export class InstanceLayer implements Custom3DTileRenderLayer {
         });
 
         // Cache tiles and check readiness
-        for (const tile of visibleTiles) {
+        for (const tile of this._visibleTiles) {
             const canonicalID = tile.canonical;
             const vectorTile = this.vectorSource.getTile(tile, {
                 build_triangle: true,
@@ -213,7 +223,9 @@ export class InstanceLayer implements Custom3DTileRenderLayer {
                     //create tile data info
                     const scene = new THREE.Scene();
                     tileDataInfo = {
-                        sceneTile: scene
+                        sceneTile: scene,
+                        shadowLitMaterials: [],
+                        instanceShadowMaterials: [],
                     };
                     //const dirLight = (this.sun?.sun_dir ?? new THREE.Vector3(0.5, 0.5, 0.5)).clone().normalize();
                     //createLightGroup(scene, dirLight);
@@ -228,24 +240,31 @@ export class InstanceLayer implements Custom3DTileRenderLayer {
                 }
                 this.distribute(mapNumber, this.mapObj3d.size, count);
                 const instanceGroups: InstancedGroupMesh[] = [];
+                const shadowMeshGroups: InstancedMesh[][] = [];
                 for (const [key, object_count] of mapNumber) {
                     const obj3d = this.mapObj3d.get(key);
                     if (!obj3d) continue;
                     const instancedObject3d = new InstancedGroupMesh(obj3d as THREE.Group, object_count);
                     instancedObject3d.name = `instancedMesh_${key}`;
+                    const shadowMeshes: InstancedMesh[] = [];
                     obj3d.traverse((child) => {
                         if (child instanceof THREE.Mesh) {
                             if (this.shadowMaterial) {
                                 const instanceShadow = new InstancedMesh(child.geometry, this.shadowMaterial, object_count);
-                                instanceShadow.name = `instanceShadowMesh_${key}`;
-                                tileDataInfo?.sceneTile.add(instanceShadow);
+                                tileDataInfo!.sceneTile.add(instanceShadow);
+                                shadowMeshes.push(instanceShadow);
                             }
                         }
                     });
                     tileDataInfo.sceneTile.add(instancedObject3d);
                     instanceGroups.push(instancedObject3d);
+                    shadowMeshGroups.push(shadowMeshes);
                 }
-                //shadow obj
+                const sun_dir = this.sun?.sun_dir;
+                const tmpPos = new THREE.Vector3();
+                const tmpScale = new THREE.Vector3();
+                const tmpQuat = new THREE.Quaternion();
+                const tmpMatrix = new THREE.Matrix4();
                 for (const [index, feature] of layer.features.entries()) {
                     const point = feature.geometry[0][0];
                     const lat_lon: LatLon = tileLocalToLatLon(
@@ -256,26 +275,40 @@ export class InstanceLayer implements Custom3DTileRenderLayer {
                         point.y,
                     );
                     const scaleUnit = getMetersPerExtentUnit(lat_lon.lat, canonicalID.z);
-                    const matrix = new THREE.Matrix4();
-                    const scale = new THREE.Vector3(
-                        scaleUnit,
-                        -scaleUnit,
-                        1
-                    );
-                    const position = new THREE.Vector3(point.x, point.y, 0);
-                    const rotation = new THREE.Quaternion()
-                        .setFromAxisAngle(
-                            new THREE.Vector3(1, 0, 0),
-                            0
-                        );
-                    matrix.compose(position, rotation, scale);
+                    tmpScale.set(scaleUnit, -scaleUnit, 1);
+                    tmpPos.set(point.x, point.y, 0);
+                    tmpQuat.identity();
+                    tmpMatrix.compose(tmpPos, tmpQuat, tmpScale);
                     const groupIndex = index % instanceGroups.length;
                     const instanceIndex = Math.floor(index / instanceGroups.length);
-                    instanceGroups[groupIndex].setUserDataAt(instanceIndex, {
-                        scale_unit: scaleUnit
-                    });
-                    instanceGroups[groupIndex].setMatrixAt(instanceIndex, matrix);
+                    instanceGroups[groupIndex].setMatrixAt(instanceIndex, tmpMatrix);
+                    // tính shadow matrix 1 lần luôn
+                    if (sun_dir && shadowMeshGroups[groupIndex]) {
+                        this.sunVector.set(-sun_dir.x, -sun_dir.y, sun_dir.z / scaleUnit);
+                        buildShadowMatrix(this.sunVector, 0, this.shadowMatrix);
+                        this.finalMatrix.multiplyMatrices(this.shadowMatrix, tmpMatrix);
+                        for (const shadowMesh of shadowMeshGroups[groupIndex]) {
+                            shadowMesh.setMatrixAt(instanceIndex, this.finalMatrix);
+                        }
+                    }
                 }
+                // đánh dấu cập nhật instanceMatrix cho shadow meshes
+                for (const shadowMeshes of shadowMeshGroups) {
+                    for (const sm of shadowMeshes) {
+                        sm.instanceMatrix.needsUpdate = true;
+                    }
+                }
+                // cache materials để updateShadowPass không cần traverse
+                tileDataInfo.sceneTile.traverse((child) => {
+                    if (child instanceof THREE.Mesh) {
+                        if (child.material instanceof ShadowLitMaterial) {
+                            tileDataInfo!.shadowLitMaterials.push(child.material);
+                        }
+                        if (child.material instanceof InstanceShadowMaterial) {
+                            tileDataInfo!.instanceShadowMaterials.push(child.material);
+                        }
+                    }
+                });
             }
         }
     }
@@ -316,7 +349,7 @@ export class InstanceLayer implements Custom3DTileRenderLayer {
             return;
         }
         this.renderer.resetState();
-        this.renderer.clearStencil();
+        //this.renderer.clearStencil();
         for (const tile of visibleTiles) {
             const tile_key = this.tileKey(tile.canonical.x, tile.canonical.y, tile.canonical.z);
             const projectionData = tr.getProjectionData({
@@ -326,7 +359,7 @@ export class InstanceLayer implements Custom3DTileRenderLayer {
             const tileInfo = this.tileCache.get(tile_key);
             if (tileInfo) {
                 const tileMatrix = projectionData.mainMatrix;
-                this.camera.projectionMatrix = new THREE.Matrix4().fromArray(tileMatrix);
+                this.camera.projectionMatrix = this._projMatrix.fromArray(tileMatrix);
                 if (this.currentScene != tileInfo.sceneTile) {
                     if (this.currentScene) {
                         this.currentScene.remove(this.light);
@@ -334,8 +367,7 @@ export class InstanceLayer implements Custom3DTileRenderLayer {
                     tileInfo.sceneTile.add(this.light);
                     this.currentScene = tileInfo.sceneTile;
                 }
-                this.updateShadowPass(tileInfo.sceneTile, tile_key);
-                this.updateShadow(tileInfo.sceneTile);
+                this.updateShadowPass(tileInfo, tile_key);
                 this.renderer.render(tileInfo.sceneTile, this.camera);
             }
         }
@@ -345,19 +377,9 @@ export class InstanceLayer implements Custom3DTileRenderLayer {
         if (!this.map || !this.camera || !this.renderer || !this.visible || !this.vectorSource || !this.light) {
             return;
         }
-        // InstanceShadowMaterial sample building shadow map để skip vùng đã có bóng building
-        const zoom = clampZoom(this.vectorSource.minZoom,
-            this.vectorSource.maxZoom,
-            Math.round(this.map.getZoom()));
-        const visibleTiles = this.map.coveringTiles({
-            tileSize: this.tileSize,
-            minzoom: zoom,
-            maxzoom: zoom,
-            roundZoom: true,
-        });
         const tr = this.map.transform;
-        this.shadowPass(tr,visibleTiles); 
-        this.mainPass(tr,visibleTiles); 
+        this.shadowPass(tr, this._visibleTiles);
+        this.mainPass(tr, this._visibleTiles);
     }
 
     getShadowParam() {
@@ -368,54 +390,18 @@ export class InstanceLayer implements Custom3DTileRenderLayer {
         this.layerSourceCastShadow = source;
     }
 
-    private updateShadowPass(scene: THREE.Scene, tileKey: string): void {
+    private updateShadowPass(tileInfo: DataTileInfoForInstanceLayer, tileKey: string): void {
         const shadowParam = this.layerSourceCastShadow?.getShadowParam();
         const lightMatrix = this._lightMatrices.get(tileKey);
         if (!shadowParam || !lightMatrix) return;
         const shadowMap = shadowParam.shadowRenderTarget.getRenderTarget();
         const lightDir = shadowParam.lightDir;
-        // Copy WebGL texture handle from source renderer to this renderer
-        if (this.renderer && shadowParam.renderer !== this.renderer) {
-            const srcProps = (shadowParam.renderer as any).properties.get(shadowMap.texture);
-            const dstProps = (this.renderer as any).properties.get(shadowMap.texture);
-            if (srcProps?.__webglTexture && !dstProps?.__webglTexture) {
-                Object.assign(dstProps, srcProps);
-            }
+        for (const mat of tileInfo.shadowLitMaterials) {
+            mat.update(lightMatrix, shadowMap, lightDir);
         }
-        scene.traverse((child) => {
-            if (child instanceof THREE.Mesh) {
-                if (child.material instanceof ShadowLitMaterial) {
-                    child.material.update(lightMatrix, shadowMap, lightDir);
-                }
-                if (child.material instanceof InstanceShadowMaterial) {
-                    child.material.update(lightMatrix, shadowMap);
-                }
-            }
-        });
+        for (const mat of tileInfo.instanceShadowMaterials) {
+            mat.update(lightMatrix, shadowMap);
+        }
     }
 
-    private updateShadow(scene: THREE.Scene) {
-        const sun_dir = this.sun?.sun_dir;
-        if (!sun_dir) {
-            return;
-        }
-        for (const [key] of this.mapObj3d) {
-            const instanceMesh = scene.getObjectByName(`instancedMesh_${key}`) as InstancedGroupMesh;
-            const instanceShadowMesh = scene.getObjectByName(`instanceShadowMesh_${key}`) as InstancedMesh;
-            if (instanceShadowMesh) {
-                const count = instanceShadowMesh.count;
-                for (let i = 0; i < count; ++i) {
-                    const scaleUnit: number = instanceMesh.getUserDataAt(i)?.scale_unit as number;
-                    if (scaleUnit) {
-                        instanceMesh.getMatrixAt(i, this.baseMatrix);
-                        this.sunVector.set(-sun_dir.x, -sun_dir.y, sun_dir.z / scaleUnit);
-                        buildShadowMatrix(this.sunVector, 0, this.shadowMatrix);
-                        this.finalMatrix.multiplyMatrices(this.shadowMatrix, this.baseMatrix);
-                        instanceShadowMesh.setMatrixAt(i, this.finalMatrix);
-                    }
-                }
-            }
-            instanceShadowMesh.instanceMatrix.needsUpdate = true;
-        }
-    }
 }
