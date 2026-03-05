@@ -25,6 +25,7 @@ export class WaterLayer implements Custom3DTileRenderLayer {
     visible: boolean = true;
     onPick?: (info: PickHit) => void;
     onPickfail?: () => void;
+    layerSourceCastShadow: Custom3DTileRenderLayer | null = null;
     sourceLayer: string;
     readonly type = 'custom' as const;
     readonly renderingMode = '3d' as const;
@@ -356,5 +357,13 @@ export class WaterLayer implements Custom3DTileRenderLayer {
                 this.map.triggerRepaint();
             }
         }
+    }
+
+    getShadowParam() {
+        return undefined;
+    }
+
+    setLayerSourceCastShadow(source: Custom3DTileRenderLayer): void {
+        this.layerSourceCastShadow = source;
     }
 }

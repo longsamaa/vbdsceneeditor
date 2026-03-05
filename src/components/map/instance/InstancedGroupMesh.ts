@@ -33,9 +33,23 @@ class InstancedGroupMesh extends THREE.Group {
         Object.keys(meshCollect).forEach(uuid => {
             const meshes = meshCollect[uuid]
             const mesh = meshes[0]
-            const instancedMesh = new THREE.InstancedMesh(mesh.geometry, mesh.material, meshes.length * count)
+            const mat = mesh.material as THREE.Material
+            if (mat instanceof THREE.ShaderMaterial) {
+                mat.defines = { ...mat.defines, USE_INSTANCING: '' }
+                mat.needsUpdate = true
+            }
+            const instancedMesh = new THREE.InstancedMesh(mesh.geometry, mat, meshes.length * count)
             instanceCollect[uuid] = instancedMesh
             this.add(instancedMesh)
+        })
+    }
+    updateMaterial(lightMatrix: THREE.Matrix4 | undefined,
+            shadowMap: THREE.WebGLRenderTarget | undefined)
+    {
+        console.log(lightMatrix); 
+        console.log(shadowMap); 
+        Object.values(this.instanceCollect).forEach(instancedMesh => {
+            console.log(instancedMesh.material); 
         })
     }
     setMatrixAt(index: number, matrix: THREE.Matrix4) {

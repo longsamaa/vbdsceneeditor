@@ -1,5 +1,5 @@
-import maplibregl, {MapMouseEvent,} from 'maplibre-gl';
-import {bakeWorldAndConvertYupToZup, createLightGroup, loadModelFromGlb,} from '../model/objModel.ts';
+import maplibregl, {type CustomRenderMethodInput, MapMouseEvent, OverscaledTileID} from 'maplibre-gl';
+import {bakeWorldAndConvertYupToZup, createLightGroup, loadModelFromGlb, applyShadowLitMaterial} from '../model/objModel.ts';
 import {clampZoom, getMetersPerExtentUnit, tileLocalToLatLon} from '../convert/map_convert.ts';
 import type {
     Custom3DTileRenderLayer,
@@ -15,6 +15,10 @@ import {InstancedMesh} from 'three';
 import {CustomVectorSource} from "../source/CustomVectorSource.ts"
 import {buildShadowMatrix, calculateSunDirectionMaplibre} from "../shadow/ShadowHelper.ts";
 import InstancedGroupMesh from "./InstancedGroupMesh.ts";
+import {ShadowLitMaterial, InstanceShadowMaterial} from "../shadow/ShadowLitMaterial.ts"
+import {
+    calculateTileMatrixThree,
+} from "../shadow/ShadowCamera.ts";
 
 export type InstanceLayerOpts = {
     id: string;
@@ -35,6 +39,7 @@ export class InstanceLayer implements Custom3DTileRenderLayer {
     visible: boolean = true;
     onPick?: (info: PickHit) => void;
     onPickfail?: () => void;
+    layerSourceCastShadow: Custom3DTileRenderLayer | null = null;
     sourceLayer: string;
     readonly type = 'custom' as const;
     readonly renderingMode = '3d' as const;
@@ -42,7 +47,7 @@ export class InstanceLayer implements Custom3DTileRenderLayer {
     private vectorSource: CustomVectorSource | null = null;
     private tileCache: Map<string, DataTileInfoForInstanceLayer> = new Map<string, DataTileInfoForInstanceLayer>();
     private objectUrls: string[];
-    private shadowMaterial: THREE.MeshBasicMaterial | null = null;
+    private shadowMaterial: InstanceShadowMaterial | null = null;
     private mapObj3d: Map<string, THREE.Object3D> = new Map<string, THREE.Object3D>();
     //private raycaster = new THREE.Raycaster();
     private sun: SunParamater | null | undefined;
@@ -58,7 +63,10 @@ export class InstanceLayer implements Custom3DTileRenderLayer {
     private sunVector = new THREE.Vector3();
     private minZoom: number;
     private maxZoom: number;
-
+    //shadow-pass object //
+    private readonly _lightMatrices = new Map<string, THREE.Matrix4>();
+    private readonly _tmpMatrix = new THREE.Matrix4();
+    
     constructor(opts: InstanceLayerOpts & { onPick?: (info: PickHit) => void } & { onPickfail?: () => void }) {
         this.id = opts.id;
         this.applyGlobeMatrix = opts.applyGlobeMatrix;
@@ -79,17 +87,7 @@ export class InstanceLayer implements Custom3DTileRenderLayer {
         if (this.sun) {
             this.light = createLightGroup(dirLight);
         }
-        this.shadowMaterial = new THREE.MeshBasicMaterial({
-            color: 0x000000,
-            transparent: true,
-            opacity: 0.5,
-            depthWrite: false,
-            stencilWrite: true,
-            stencilFunc: THREE.EqualStencilFunc,
-            stencilRef: 0,
-            stencilZPass: THREE.IncrementStencilOp,
-            side: THREE.DoubleSide
-        });
+        this.shadowMaterial = new InstanceShadowMaterial();
         this.minZoom = opts.minZoom ?? 0;
         this.maxZoom = opts.maxZoom ?? 19;
     }
@@ -112,6 +110,12 @@ export class InstanceLayer implements Custom3DTileRenderLayer {
                 if (model_data.object3d) {
                     const object3d = model_data.object3d;
                     bakeWorldAndConvertYupToZup(object3d);
+                    object3d.traverse((child) => {
+                        if (child instanceof THREE.Mesh) {
+                            applyShadowLitMaterial(child);
+                        }
+                    });
+
                     if (!this.mapObj3d.has(url)) {
                         this.mapObj3d.set(url, object3d);
                     }
@@ -278,98 +282,6 @@ export class InstanceLayer implements Custom3DTileRenderLayer {
 
     private handleClick = (e: MapMouseEvent) => {
         console.log(e);
-        /*if (!this.map || !this.camera || !this.renderer || !this.visible) {
-            return;
-        }
-        // to NDC [-1..1]
-        const canvas = this.map.getCanvas();
-        const rect = canvas.getBoundingClientRect();
-        const ndc = new THREE.Vector2(
-            ((e.point.x) / rect.width) * 2 - 1,
-            -(((e.point.y) / rect.height) * 2 - 1),
-        );
-        // lấy visible tiles + tile entries đã build scene
-        const zoom = clampZoom(this.editorLevel, this.editorLevel, Math.round(this.map.getZoom()));
-        const visibleTiles = (this.map).coveringTiles({
-            tileSize: this.tileSize,
-            minzoom: zoom,
-            maxzoom: zoom,
-            roundZoom: true,
-        }) as OverscaledTileID[];
-        const tr = (this.map).transform;
-        if (!tr?.getProjectionData) {
-            return;
-        }
-        let bestHit: {
-            dist: number;
-            tileKey: string;
-            overScaledTileID: OverscaledTileID,
-            group: THREE.Object3D
-        } | null = null;
-        for (const tid of visibleTiles) {
-            const canonicalTileID = tid.canonical;
-            const key = this.tileKey(canonicalTileID.x, canonicalTileID.y, canonicalTileID.z);
-            const tile = this.tileCache.get(key);
-            if (!tile?.sceneTile) {
-                continue;
-            }
-
-            const proj = tr.getProjectionData({
-                overscaledTileID: tid,
-                applyGlobeMatrix: this.applyGlobeMatrix,
-            });
-
-            // ---- manual ray from MVP inverse ----
-            const mvp = new THREE.Matrix4().fromArray(proj.mainMatrix);
-            const inv = mvp.clone().invert();
-
-            const pNear = new THREE.Vector4(ndc.x, ndc.y, -1, 1).applyMatrix4(inv);
-            pNear.multiplyScalar(1 / pNear.w);
-
-            const pFar = new THREE.Vector4(ndc.x, ndc.y, 1, 1).applyMatrix4(inv);
-            pFar.multiplyScalar(1 / pFar.w);
-
-            const origin = new THREE.Vector3(pNear.x, pNear.y, pNear.z);
-            const direction = new THREE.Vector3(pFar.x, pFar.y, pFar.z).sub(origin).normalize();
-
-            this.raycaster.ray.origin.copy(origin);
-            this.raycaster.ray.direction.copy(direction);
-
-            const hits = this.raycaster.intersectObjects(tile.sceneTile.children, true);
-            if (hits.length) {
-                const h0 = hits[0];
-                let obj: THREE.Object3D | null = h0.object;
-                while (obj && !obj.userData?.isModelRoot) {
-                    obj = obj.parent as THREE.Object3D;
-                }
-                if (obj) {
-                    if (!bestHit || h0.distance < bestHit.dist) {
-                        bestHit = {
-                            dist: h0.distance,
-                            tileKey: key,
-                            overScaledTileID: tid,
-                            group: obj
-                        };
-                    }
-                }
-            }
-        }
-
-        if (!bestHit) {
-            if (this.onPickfail) {
-                this.onPickfail();
-            }
-            this.map.triggerRepaint();
-            return;
-        }
-        const obj = bestHit.group;
-        this.onPick?.({
-            dist: bestHit.dist,
-            tileKey: bestHit.tileKey,
-            object: obj,
-            overScaledTileId: bestHit.overScaledTileID
-        });
-        this.map.triggerRepaint();*/
     };
 
     distribute(mapNumber: Map<string, number>, object_size: number, feature_size: number) {
@@ -386,21 +298,25 @@ export class InstanceLayer implements Custom3DTileRenderLayer {
         }
     }
 
-    render(): void {
+    shadowPass(tr : any, visibleTiles : OverscaledTileID[]) : void {
+        if(!this._lightMatrices || !this.renderer || !this.layerSourceCastShadow) return; 
+        this._lightMatrices.clear(); 
+        const shadowMatrix = this.layerSourceCastShadow.getShadowParam()?.shadowMatrix; 
+        if(!shadowMatrix) return; 
+        for(const tile of visibleTiles){
+            const tile_key = this.tileKey(tile.canonical.x, tile.canonical.y, tile.canonical.z);
+            const mat = calculateTileMatrixThree(tile.toUnwrapped(), tr.worldSize);
+            const light_matrix = this._tmpMatrix.multiplyMatrices(shadowMatrix, mat).clone();
+            this._lightMatrices.set(tile_key, light_matrix);
+        }
+    }
+
+    mainPass(tr : any, visibleTiles : OverscaledTileID[]){
         if (!this.map || !this.camera || !this.renderer || !this.visible || !this.vectorSource || !this.light) {
             return;
         }
+        this.renderer.resetState();
         this.renderer.clearStencil();
-        const zoom = clampZoom(this.vectorSource.minZoom,
-            this.vectorSource.maxZoom,
-            Math.round(this.map.getZoom()));
-        const visibleTiles = this.map.coveringTiles({
-            tileSize: this.tileSize,
-            minzoom: zoom,
-            maxzoom: zoom,
-            roundZoom: true,
-        });
-        const tr = this.map.transform;
         for (const tile of visibleTiles) {
             const tile_key = this.tileKey(tile.canonical.x, tile.canonical.y, tile.canonical.z);
             const projectionData = tr.getProjectionData({
@@ -418,11 +334,64 @@ export class InstanceLayer implements Custom3DTileRenderLayer {
                     tileInfo.sceneTile.add(this.light);
                     this.currentScene = tileInfo.sceneTile;
                 }
+                this.updateShadowPass(tileInfo.sceneTile, tile_key);
                 this.updateShadow(tileInfo.sceneTile);
-                this.renderer.resetState();
                 this.renderer.render(tileInfo.sceneTile, this.camera);
             }
         }
+    }
+
+    render(): void {
+        if (!this.map || !this.camera || !this.renderer || !this.visible || !this.vectorSource || !this.light) {
+            return;
+        }
+        // InstanceShadowMaterial sample building shadow map để skip vùng đã có bóng building
+        const zoom = clampZoom(this.vectorSource.minZoom,
+            this.vectorSource.maxZoom,
+            Math.round(this.map.getZoom()));
+        const visibleTiles = this.map.coveringTiles({
+            tileSize: this.tileSize,
+            minzoom: zoom,
+            maxzoom: zoom,
+            roundZoom: true,
+        });
+        const tr = this.map.transform;
+        this.shadowPass(tr,visibleTiles); 
+        this.mainPass(tr,visibleTiles); 
+    }
+
+    getShadowParam() {
+        return undefined;
+    }
+
+    setLayerSourceCastShadow(source: Custom3DTileRenderLayer): void {
+        this.layerSourceCastShadow = source;
+    }
+
+    private updateShadowPass(scene: THREE.Scene, tileKey: string): void {
+        const shadowParam = this.layerSourceCastShadow?.getShadowParam();
+        const lightMatrix = this._lightMatrices.get(tileKey);
+        if (!shadowParam || !lightMatrix) return;
+        const shadowMap = shadowParam.shadowRenderTarget.getRenderTarget();
+        const lightDir = shadowParam.lightDir;
+        // Copy WebGL texture handle from source renderer to this renderer
+        if (this.renderer && shadowParam.renderer !== this.renderer) {
+            const srcProps = (shadowParam.renderer as any).properties.get(shadowMap.texture);
+            const dstProps = (this.renderer as any).properties.get(shadowMap.texture);
+            if (srcProps?.__webglTexture && !dstProps?.__webglTexture) {
+                Object.assign(dstProps, srcProps);
+            }
+        }
+        scene.traverse((child) => {
+            if (child instanceof THREE.Mesh) {
+                if (child.material instanceof ShadowLitMaterial) {
+                    child.material.update(lightMatrix, shadowMap, lightDir);
+                }
+                if (child.material instanceof InstanceShadowMaterial) {
+                    child.material.update(lightMatrix, shadowMap);
+                }
+            }
+        });
     }
 
     private updateShadow(scene: THREE.Scene) {

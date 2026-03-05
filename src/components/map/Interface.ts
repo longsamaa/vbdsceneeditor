@@ -2,6 +2,7 @@ import * as THREE from 'three'
 import type {CustomLayerInterface} from 'maplibre-gl';
 import {OverscaledTileID} from 'maplibre-gl';
 import type {ShadowLitMaterial} from './shadow/ShadowLitMaterial';
+import type {ShadowRenderTarget} from './shadow/ShadowRenderTarget';
 
 export interface LocalCoordinate {
     tileX: number,
@@ -102,10 +103,20 @@ export type LightGroup = THREE.Group & {
 };
 
 
+export type ShadowParam = {
+    shadowRenderTarget: ShadowRenderTarget;
+    shadowMatrix: THREE.Matrix4;
+    lightDir: THREE.Vector3;
+    renderer: THREE.WebGLRenderer;
+}
+
 export type Custom3DTileRenderLayer = CustomLayerInterface & {
     visible : boolean,
     onPick?: (info: PickHit) => void,
     onPickfail?: () => void,
+    layerSourceCastShadow: Custom3DTileRenderLayer | null,
+    getShadowParam(): ShadowParam | undefined,
+    setLayerSourceCastShadow(source: Custom3DTileRenderLayer): void,
 }
 
 

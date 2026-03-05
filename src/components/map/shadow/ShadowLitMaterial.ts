@@ -35,7 +35,7 @@ export class ShadowDepthMaterial extends THREE.ShaderMaterial {
 export class ShadowLitMaterial extends THREE.ShaderMaterial {
     constructor(shadowMap: THREE.WebGLRenderTarget | null = null) {
         super({
-            side: THREE.FrontSide,
+            side: THREE.DoubleSide,
             polygonOffset: true,
             polygonOffsetFactor: 2,
             polygonOffsetUnits: 2,
@@ -47,13 +47,17 @@ export class ShadowLitMaterial extends THREE.ShaderMaterial {
                 hasShadowMap:  { value: 0 },
                 baseMap:       { value: null as THREE.Texture | null },
                 hasBaseMap:    { value: 0 },
+                alphaMap:      { value: null as THREE.Texture | null },
+                hasAlphaMap:   { value: 0 },
+                alphaTest:     { value: 0.0 },
                 baseColor:     { value: new THREE.Color(1, 1, 1) },
-                ambient:       { value: 1.0 },
-                diffuseIntensity: { value: 2.0 },
+                colorLift:     { value: 0.0 },
+                ambient:       { value: 0.8 },
+                diffuseIntensity: { value: 0.8 },
                 uOpacity:      { value: 1.0 },
-                shadowStrength: { value: 0.5 },
+                shadowStrength: { value: 0.8 },
                 lightColor:    { value: new THREE.Color(1.0, 0.96, 0.88) },
-                biasBase:      { value: 0.0008 },
+                biasBase:      { value: 0.0001 },
                 biasSlope:     { value: 0.0001 },
             },
             vertexShader: /* glsl */`
@@ -61,21 +65,38 @@ export class ShadowLitMaterial extends THREE.ShaderMaterial {
                 out vec3 vLightNDC;
                 out vec2 vUv;
                 varying vec3 vNormal;
+                #ifdef USE_VERTEX_COLOR
+                    attribute vec3 color;
+                    varying vec3 vColor;
+                #endif
                 void main() {
                     vUv = uv;
-                    vec4 worldPos = modelMatrix * vec4(position, 1.0);
+                    #ifdef USE_VERTEX_COLOR
+                        vColor = color;
+                    #endif
+                    vec4 localPos = vec4(position, 1.0);
+                    vec3 localNormal = normal;
+                    #ifdef USE_INSTANCING
+                        localPos = instanceMatrix * localPos;
+                        localNormal = mat3(instanceMatrix) * localNormal;
+                    #endif
+                    vec4 worldPos = modelMatrix * localPos;
                     gl_Position = projectionMatrix * viewMatrix * worldPos;
                     vec4 lightClip = lightMatrix * worldPos;
                     vLightNDC = lightClip.xyz / lightClip.w;
-                    vNormal = normalize(normalMatrix * normal);
+                    vNormal = normalize(mat3(modelMatrix) * localNormal);
                 }
             `,
             fragmentShader: /* glsl */`
                 uniform sampler2D shadowMap;
-                uniform sampler2D baseMap; 
+                uniform sampler2D baseMap;
+                uniform sampler2D alphaMap;
                 uniform int hasBaseMap;
+                uniform int hasAlphaMap;
+                uniform float alphaTest;
                 uniform int hasShadowMap;
                 uniform vec3 baseColor;
+                uniform float colorLift;
                 uniform vec3 lightDir;
                 uniform vec2 shadowMapSize;
                 uniform float ambient;
@@ -88,20 +109,40 @@ export class ShadowLitMaterial extends THREE.ShaderMaterial {
                 in vec3 vLightNDC;
                 in vec2 vUv;
                 varying vec3 vNormal;
+                #ifdef USE_VERTEX_COLOR
+                    varying vec3 vColor;
+                #endif
                 void main() {
-                    // Sample base color from original texture or use flat color
+                    // Sample base color from original texture, vertex color, or flat color
                     vec3 albedo = baseColor;
+                    float alpha = uOpacity;
+                    #ifdef USE_VERTEX_COLOR
+                        albedo *= vColor;
+                    #endif
                     if (hasBaseMap == 1) {
-                        albedo *= texture2D(baseMap, vUv).rgb;
+                        vec4 tex = texture2D(baseMap, vUv);
+                        albedo *= tex.rgb;
+                        alpha *= tex.a;
                     }
+                    // Alpha map (separate alpha texture)
+                    if (hasAlphaMap == 1) {
+                        alpha *= texture2D(alphaMap, vUv).r;
+                    }
+                    // Alpha test discard
+                    if (alphaTest > 0.0 && alpha < alphaTest) discard;
+                    // Lighten albedo naturally: mix toward white
+                    albedo = mix(albedo, vec3(1.0), colorLift);
                     vec3 N = normalize(vNormal);
                     vec3 L = normalize(lightDir);
                     float NdotL = dot(N, L);
-                    float diffuse = clamp(NdotL, 0.0, 1.0);
-                    // No shadow map → just albedo + N·L diffuse lighting
+                    float diffuse = abs(NdotL);
+                    // lighting = ambient + NdotL * diffuseIntensity
+                    // ambient=0.8: mặt khuất giữ 80% albedo
+                    // diffuseIntensity=1.0: mặt sáng nhất = ambient + 1.0 = 1.8 (hơi sáng hơn gốc)
+                    float lighting = ambient + diffuse * diffuseIntensity;
+                    vec3 lit = albedo * lightColor * lighting;
                     if (hasShadowMap == 0) {
-                        vec3 lit = albedo * ambient + albedo * lightColor * diffuse * diffuseIntensity;
-                        gl_FragColor = vec4(lit, uOpacity);
+                        gl_FragColor = vec4(lit, alpha);
                         return;
                     }
                     vec3 projCoords = vLightNDC * 0.5 + 0.5;
@@ -109,8 +150,7 @@ export class ShadowLitMaterial extends THREE.ShaderMaterial {
                     if (projCoords.x < 0.0 || projCoords.x > 1.0 ||
                         projCoords.y < 0.0 || projCoords.y > 1.0 ||
                         projCoords.z > 1.0) {
-                        vec3 lit = albedo * ambient + albedo * lightColor * diffuse * diffuseIntensity;
-                        gl_FragColor = vec4(lit, uOpacity);
+                        gl_FragColor = vec4(lit, alpha);
                         return;
                     }
                     float bias = biasBase + biasSlope * (1.0 - diffuse);
@@ -125,9 +165,9 @@ export class ShadowLitMaterial extends THREE.ShaderMaterial {
                         }
                     }
                     shadow /= 49.0;
-                    float shadowAmbient = mix(ambient * shadowStrength, ambient, shadow);
-                    vec3 lit = albedo * shadowAmbient + albedo * lightColor * diffuse * shadow * diffuseIntensity;
-                    gl_FragColor = vec4(lit, uOpacity);
+                    // shadow: 1.0 = fully lit, 0.0 = fully shadowed
+                    float shadowLighting = mix(ambient * shadowStrength, lighting, shadow);
+                    gl_FragColor = vec4(albedo * lightColor * shadowLighting, alpha);
                 }
             `,
         });
@@ -199,8 +239,9 @@ export class GroundShadowMaterial extends THREE.ShaderMaterial {
     constructor(shadowMap: THREE.WebGLRenderTarget | null = null) {
         super({
             side: THREE.DoubleSide,
-            transparent: true,
+            transparent: false,
             depthWrite: false,
+            blending: THREE.MultiplyBlending,
             polygonOffset: true,
             polygonOffsetFactor: 4,
             polygonOffsetUnits: 4,
@@ -213,7 +254,6 @@ export class GroundShadowMaterial extends THREE.ShaderMaterial {
                 lightMatrix:   { value: new THREE.Matrix4() },
                 shadowMapSize: { value: new THREE.Vector2(8192, 8192) },
                 hasShadowMap:  { value: 0 },
-                shadowColor:   { value: new THREE.Color(0, 0, 0) },
                 uOpacity:      { value: 1.0 },
                 shadowStrength: { value: 0.8 },
                 biasBase:      { value: 0.0001 },
@@ -232,7 +272,6 @@ export class GroundShadowMaterial extends THREE.ShaderMaterial {
             fragmentShader: /* glsl */`
                 uniform sampler2D shadowMap;
                 uniform int hasShadowMap;
-                uniform vec3 shadowColor;
                 uniform vec2 shadowMapSize;
                 uniform float uOpacity;
                 uniform float shadowStrength;
@@ -241,14 +280,16 @@ export class GroundShadowMaterial extends THREE.ShaderMaterial {
                 in vec3 vLightNDC;
                 void main() {
                     if (hasShadowMap == 0) {
-                        discard;
+                        gl_FragColor = vec4(1.0);
+                        return;
                     }
                     vec3 projCoords = vLightNDC * 0.5 + 0.5;
-                    // outside shadow map → no shadow
+                    // outside shadow map → no shadow (multiply by 1.0 = no change)
                     if (projCoords.x < 0.0 || projCoords.x > 1.0 ||
                         projCoords.y < 0.0 || projCoords.y > 1.0 ||
                         projCoords.z > 1.0) {
-                        discard;
+                        gl_FragColor = vec4(1.0);
+                        return;
                     }
                     float current = projCoords.z;
                     float bias = biasBase + biasSlope;
@@ -262,8 +303,9 @@ export class GroundShadowMaterial extends THREE.ShaderMaterial {
                         }
                     }
                     shadow /= 49.0;
-                    if (shadow < 0.01) discard;
-                    gl_FragColor = vec4(shadowColor, shadow * shadowStrength * uOpacity);
+                    // brightness = 1.0 (no shadow) to (1 - strength) (full shadow)
+                    float brightness = 1.0 - shadow * shadowStrength * uOpacity;
+                    gl_FragColor = vec4(vec3(brightness), 1.0);
                 }
             `,
         });
@@ -296,7 +338,110 @@ export class GroundShadowMaterial extends THREE.ShaderMaterial {
         this.uniforms.biasSlope.value = slope;
     }
 
-    setShadowColor(color: THREE.Color): void {
-        this.uniforms.shadowColor.value.copy(color);
+    setShadowColor(_color: THREE.Color): void {
+        // MultiplyBlending: shadow darkness controlled by shadowStrength uniform
+    }
+}
+
+/**
+ * Instance flat shadow — dùng MultiplyBlending.
+ * Sample building shadow map: nếu pixel đã trong vùng shadow building → output 1.0 (không darkening).
+ * Chỉ darkening ở pixel chưa có building shadow → tránh overlap.
+ */
+export class InstanceShadowMaterial extends THREE.ShaderMaterial {
+    constructor() {
+        super({
+            side: THREE.DoubleSide,
+            transparent: false,
+            depthWrite: false,
+            blending: THREE.MultiplyBlending,
+            // Tránh self-overlap: test stencil==0, vẽ xong increment
+            stencilWrite: true,
+            stencilFunc: THREE.EqualStencilFunc,
+            stencilRef: 0,
+            stencilZPass: THREE.IncrementStencilOp,
+            uniforms: {
+                shadowMap:       { value: null as THREE.Texture | null },
+                lightMatrix:     { value: new THREE.Matrix4() },
+                shadowMapSize:   { value: new THREE.Vector2(8192, 8192) },
+                hasShadowMap:    { value: 0 },
+                shadowBrightness: { value: 0.4 },
+                biasBase:        { value: 0.0001 },
+                biasSlope:       { value: 0.0 },
+            },
+            vertexShader: /* glsl */`
+                uniform mat4 lightMatrix;
+                out vec3 vLightNDC;
+                void main() {
+                    vec4 localPos = vec4(position, 1.0);
+                    #ifdef USE_INSTANCING
+                        localPos = instanceMatrix * localPos;
+                    #endif
+                    vec4 worldPos = modelMatrix * localPos;
+                    gl_Position = projectionMatrix * viewMatrix * worldPos;
+                    vec4 lightClip = lightMatrix * worldPos;
+                    vLightNDC = lightClip.xyz / lightClip.w;
+                }
+            `,
+            fragmentShader: /* glsl */`
+                uniform sampler2D shadowMap;
+                uniform int hasShadowMap;
+                uniform vec2 shadowMapSize;
+                uniform float shadowBrightness;
+                uniform float biasBase;
+                uniform float biasSlope;
+                in vec3 vLightNDC;
+                void main() {
+                    // Target brightness sau cả building + tree shadow
+                    // = min(buildingBrightness, treeBrightness) → lấy vùng tối nhất
+                    // GroundShadow đã multiply buildingBrightness vào framebuffer
+                    // Nên instance cần multiply = targetBrightness / buildingBrightness
+                    float buildingBrightness = 1.0;
+                    if (hasShadowMap == 1) {
+                        vec3 projCoords = vLightNDC * 0.5 + 0.5;
+                        if (projCoords.x >= 0.0 && projCoords.x <= 1.0 &&
+                            projCoords.y >= 0.0 && projCoords.y <= 1.0 &&
+                            projCoords.z <= 1.0) {
+                            float current = projCoords.z;
+                            float bias = biasBase + biasSlope;
+                            vec2 texelSize = 1.0 / shadowMapSize;
+                            float buildingShadow = 0.0;
+                            for (int x = -1; x <= 1; x++) {
+                                for (int y = -1; y <= 1; y++) {
+                                    float stored = texture2D(shadowMap, projCoords.xy + vec2(x, y) * texelSize).r;
+                                    buildingShadow += (current - bias > stored) ? 1.0 : 0.0;
+                                }
+                            }
+                            buildingShadow /= 9.0;
+                            buildingBrightness = 1.0 - buildingShadow * 0.8;
+                        }
+                    }
+                    // target = vùng tối nhất giữa building và tree
+                    float target = min(shadowBrightness, buildingBrightness);
+                    // GroundShadow đã darken = buildingBrightness
+                    // Cần multiply thêm = target / buildingBrightness
+                    float mul = target / max(buildingBrightness, 0.01);
+                    gl_FragColor = vec4(vec3(mul), 1.0);
+                }
+            `,
+        });
+    }
+
+    update(
+        lightMatrix: THREE.Matrix4 | undefined,
+        shadowMap: THREE.WebGLRenderTarget | undefined,
+    ): void {
+        if (!lightMatrix || !shadowMap) {
+            this.uniforms.hasShadowMap.value = 0;
+            return;
+        }
+        this.uniforms.hasShadowMap.value = 1;
+        this.uniforms.lightMatrix.value.copy(lightMatrix);
+        this.uniforms.shadowMap.value = shadowMap.texture;
+        this.uniforms.shadowMapSize.value.set(shadowMap.width, shadowMap.height);
+    }
+
+    setShadowBrightness(v: number): void {
+        this.uniforms.shadowBrightness.value = v;
     }
 }

@@ -3,6 +3,7 @@ import {OBJLoader} from 'three/examples/jsm/loaders/OBJLoader.js';
 import type {LightGroup, ModelData} from '../Interface.ts'
 import {tileLocalToLatLon} from '../convert/map_convert'
 import {GLTFLoader} from 'three/examples/jsm/loaders/GLTFLoader.js';
+import {ShadowLitMaterial} from '../shadow/ShadowLitMaterial';
 
 
 
@@ -133,7 +134,7 @@ export function reverseFaceWinding(geometry: THREE.BufferGeometry): void {
 export function prepareModelForRender(model: THREE.Object3D, setDefaultMat: boolean = true): void {
     model.matrixAutoUpdate = false;
     // convert y up to z up
-    const default_mat = new THREE.MeshLambertMaterial({color: 0xC0C0C0, side: THREE.FrontSide});
+    const default_mat = new THREE.MeshLambertMaterial({color: 0xFFFFFF, side: THREE.FrontSide});
     default_mat.polygonOffset = true;
     default_mat.polygonOffsetFactor = -1;
     default_mat.polygonOffsetUnits  = -1;
@@ -316,6 +317,62 @@ export function transformModel(posX: number,
     objec3d.matrixAutoUpdate = false;
     objec3d.updateMatrix();
     objec3d.updateMatrixWorld(true);
+}
+
+/**
+ * Replace mesh material with ShadowLitMaterial, extracting all relevant properties
+ * from the original material (color, map, alphaMap, alphaTest, opacity, vertexColors, side).
+ */
+export function applyShadowLitMaterial(mesh: THREE.Mesh): ShadowLitMaterial {
+    const origMat = mesh.material as THREE.MeshStandardMaterial;
+    const shadowMat = new ShadowLitMaterial();
+
+    if (!origMat) {
+        mesh.material = shadowMat;
+        return shadowMat;
+    }
+
+    // base color
+    if (origMat.color) {
+        shadowMat.uniforms.baseColor.value.copy(origMat.color);
+    }
+
+    // diffuse map (base texture)
+    if (origMat.map) {
+        shadowMat.uniforms.baseMap.value = origMat.map;
+        shadowMat.uniforms.hasBaseMap.value = 1;
+    }
+
+    // alpha map (separate alpha texture)
+    if (origMat.alphaMap) {
+        shadowMat.uniforms.alphaMap.value = origMat.alphaMap;
+        shadowMat.uniforms.hasAlphaMap.value = 1;
+    }
+
+    // alpha test
+    if (origMat.alphaTest > 0) {
+        shadowMat.uniforms.alphaTest.value = origMat.alphaTest;
+    }
+
+    // opacity
+    if (origMat.opacity < 1.0) {
+        shadowMat.setOpacity(origMat.opacity);
+    }
+    if (origMat.transparent) {
+        shadowMat.transparent = true;
+    }
+
+    // side
+    shadowMat.side = origMat.side ?? THREE.DoubleSide;
+
+    // vertex colors
+    if (origMat.vertexColors && mesh.geometry.hasAttribute('color')) {
+        shadowMat.defines = { ...shadowMat.defines, USE_VERTEX_COLOR: '' };
+        shadowMat.needsUpdate = true;
+    }
+
+    mesh.material = shadowMat;
+    return shadowMat;
 }
 
 export function isGlbModel(modelUrl: string): boolean {

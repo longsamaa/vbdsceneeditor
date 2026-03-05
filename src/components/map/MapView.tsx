@@ -124,12 +124,12 @@ function createDefaultMap(map: maplibregl.Map, overlay_layer: OverlayLayer, outl
     const sourceLayer = "map4d_3dmodels";
     //add overlay layer
     const sunPos = getSunPosition(center.lat, center.lng);
-    const defaultAltitude =  sunPos.altitude;
-    const defaultAzimuth = sunPos.azimuth;
+    const defaultAltitude = 42.9;
+    const defaultAzimuth = 250.3;
     const sun_options = {
         shadow: true,
-        altitude: defaultAltitude,
-        azimuth: defaultAzimuth,
+        altitude: sunPos.altitude,
+        azimuth: sunPos.azimuth,
         lat : center.lat,
         lon : center.lng,
     }
@@ -222,6 +222,7 @@ function createDefaultMap(map: maplibregl.Map, overlay_layer: OverlayLayer, outl
         }
     });
     instance_layer.setVectorSource(instanceCustomSource);
+    instance_layer.setLayerSourceCastShadow(map4d_layer); 
     map.addLayer(instance_layer);
 }
 
@@ -267,7 +268,7 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(({
             bearing: 67.97536302882756,
             canvasContextAttributes: canvas_config
         });
-        //map.current._showTileBoundaries = true;
+        map.current._showTileBoundaries = true;
         // Thêm controls
         addControlMaplibre(map.current);
         // Tao overlay truoc

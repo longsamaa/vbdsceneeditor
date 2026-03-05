@@ -10,6 +10,7 @@ import type {
     ModelData,
     ObjectInfo,
     PickHit,
+    ShadowParam,
     SunOptions,
     SunParamater
 } from '../Interface.ts';
@@ -20,7 +21,7 @@ import {
     projectToWorldCoordinates
 } from '../convert/map_convert.ts';
 import {parseLayerTileInfo} from '../tile/tile.ts';
-import {createBuildingGroup, createLightGroup, createShadowGroup, transformModel} from '../model/objModel.ts'
+import {createBuildingGroup, createLightGroup, createShadowGroup, transformModel, applyShadowLitMaterial} from '../model/objModel.ts'
 import {calculateSunDirectionMaplibre} from '../shadow/ShadowHelper.ts'
 import {MaplibreShadowMesh, GroundShadowMesh} from "../shadow/ShadowGeometry.ts";
 import {CustomVectorSource} from "../source/CustomVectorSource.ts"
@@ -75,6 +76,7 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer {
     visible = true;
     onPick?: (info: PickHit) => void;
     onPickfail?: () => void;
+    layerSourceCastShadow: Custom3DTileRenderLayer | null = null;
     sourceLayer: string;
     private modelFetcher: ModelFetch = new ModelFetch(8);
     readonly type = 'custom' as const;
@@ -527,6 +529,20 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer {
         });
     }
 
+    getShadowParam(): ShadowParam | undefined {
+        if (!this.shadowRenderPass || !this.renderer) return undefined;
+        return {
+            shadowRenderTarget: this.shadowRenderPass,
+            shadowMatrix: this.shadowMatrix,
+            lightDir: this._tmpLightDir,
+            renderer: this.renderer,
+        };
+    }
+
+    setLayerSourceCastShadow(source: Custom3DTileRenderLayer): void {
+        this.layerSourceCastShadow = source;
+    }
+
     private updateShadowPass(
         scene: THREE.Scene,
         lightMatrix: THREE.Matrix4 | undefined,
@@ -604,19 +620,7 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer {
             };
             cloneObj3d.traverse((child) => {
                 if (child instanceof THREE.Mesh) {
-                    // Tạo riêng ShadowLitMaterial cho mesh clone, copy baseMap và baseColor từ mat gốc
-                    const origMat = child.material as THREE.MeshStandardMaterial | THREE.MeshBasicMaterial | THREE.MeshPhongMaterial;
-                    const shadowMat = new ShadowLitMaterial();
-                    if (origMat) {
-                        if (origMat.map) {
-                            shadowMat.uniforms.baseMap.value = origMat.map;
-                            shadowMat.uniforms.hasBaseMap.value = 1;
-                        }
-                        if (origMat.color) {
-                            shadowMat.uniforms.baseColor.value.copy(origMat.color);
-                        }
-                    }
-                    child.material = shadowMat;
+                    applyShadowLitMaterial(child);
                     // Skip shadow cho model dẹt (z height quá nhỏ)
                     const object_shadow = new GroundShadowMesh(child);
                     object_shadow.userData = {

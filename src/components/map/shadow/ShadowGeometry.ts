@@ -162,7 +162,7 @@ export class GroundShadowMesh extends THREE.Mesh {
         m[7] = -lw * ny;
         m[11] = -lw * nz;
         m[15] = dot - lw * nc;
-        const scale = 1.5;
+        const scale = 1.0;
         this.scaleMatrix.copy(this.meshMatrix);
         this.scaleMatrix.scale(this.tempVector3.set(scale, scale, 1));
         this.matrix.multiplyMatrices(this.shadowMatrix, this.scaleMatrix);

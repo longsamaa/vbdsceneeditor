@@ -38,6 +38,7 @@ export class EditLayer implements Custom3DTileRenderLayer {
     visible : boolean = true;
     onPick?: (info: PickHit) => void;
     onPickfail?: () => void;
+    layerSourceCastShadow: Custom3DTileRenderLayer | null = null;
     readonly type = 'custom' as const;
     readonly renderingMode = '3d' as const;
     tileSize: number = 512;
@@ -396,6 +397,14 @@ export class EditLayer implements Custom3DTileRenderLayer {
             }
         });
         this.map?.triggerRepaint();
+    }
+
+    getShadowParam() {
+        return undefined;
+    }
+
+    setLayerSourceCastShadow(source: Custom3DTileRenderLayer): void {
+        this.layerSourceCastShadow = source;
     }
 
     private updateShadow(scene: THREE.Scene) {
