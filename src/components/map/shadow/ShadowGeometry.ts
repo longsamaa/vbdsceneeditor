@@ -29,7 +29,6 @@ export class MaplibreShadowMesh extends THREE.Mesh {
         this.frustumCulled = false;
         // Clip shadow theo bounding box XY của object — cắt phần nằm trong footprint
         mesh.geometry.computeBoundingBox();
-        const box = mesh.geometry.boundingBox;
     }
 
     update(sunDirX: number, sunDirY: number, sunDirZ: number, planeZ: number = 0) {
@@ -70,41 +69,11 @@ export class MaplibreShadowMesh extends THREE.Mesh {
         m[7] = -lw * ny;
         m[11] = -lw * nz;
         m[15] = dot - lw * nc;
-        // Scale mặt phẳng shadow lớn hơn để chứa đủ bóng
         const scale = 1.0;
         this.scaleMatrix.copy(this.meshMatrix);
         this.scaleMatrix.scale(this.tempVector3.set(scale, scale, 1));
         this.matrix.multiplyMatrices(this.shadowMatrix, this.scaleMatrix);
     }
-
-    /* update(sunDir: THREE.Vector3, planeZ: number = 0) {
-         const plane = new THREE.Plane(new THREE.Vector3(0, 0, 1), -planeZ);
-         const lightDir = sunDir.clone().normalize();
-         const lightPos4D = new THREE.Vector4(-lightDir.x, -lightDir.y, -lightDir.z, 0);
-         const dot = plane.normal.dot(new THREE.Vector3(lightPos4D.x, lightPos4D.y, lightPos4D.z))
-             - plane.constant * lightPos4D.w;
-         const m = this.shadowMatrix.elements;
-         m[0] = dot - lightPos4D.x * plane.normal.x;
-         m[4] = -lightPos4D.x * plane.normal.y;
-         m[8] = -lightPos4D.x * plane.normal.z;
-         m[12] = -lightPos4D.x * -plane.constant;
-
-         m[1] = -lightPos4D.y * plane.normal.x;
-         m[5] = dot - lightPos4D.y * plane.normal.y;
-         m[9] = -lightPos4D.y * plane.normal.z;
-         m[13] = -lightPos4D.y * -plane.constant;
-
-         m[2] = -lightPos4D.z * plane.normal.x;
-         m[6] = -lightPos4D.z * plane.normal.y;
-         m[10] = dot - lightPos4D.z * plane.normal.z;
-         m[14] = -lightPos4D.z * -plane.constant;
-
-         m[3] = -lightPos4D.w * plane.normal.x;
-         m[7] = -lightPos4D.w * plane.normal.y;
-         m[11] = -lightPos4D.w * plane.normal.z;
-         m[15] = dot - lightPos4D.w * -plane.constant;
-         this.matrix.multiplyMatrices(this.shadowMatrix, this.meshMatrix);
-     }*/
 }
 
 export class GroundShadowMesh extends THREE.Mesh {

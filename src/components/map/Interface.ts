@@ -3,6 +3,7 @@ import type {CustomLayerInterface} from 'maplibre-gl';
 import {OverscaledTileID} from 'maplibre-gl';
 import type {ShadowLitMaterial} from './shadow/ShadowLitMaterial';
 import type {ShadowRenderTarget} from './shadow/ShadowRenderTarget';
+import { MaplibreShadowMesh } from './shadow/ShadowGeometry';
 
 export interface LocalCoordinate {
     tileX: number,
@@ -118,5 +119,11 @@ export type Custom3DTileRenderLayer = CustomLayerInterface & {
     getShadowParam(): ShadowParam | undefined,
     setLayerSourceCastShadow(source: Custom3DTileRenderLayer): void,
 }
+
+export type ShadowPair = {
+    scaleUnit: number;
+    shadowMesh: MaplibreShadowMesh;
+}
+
 
 

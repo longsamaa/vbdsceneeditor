@@ -65,11 +65,15 @@ function createOutlineLayer(): OutlineLayer {
 
 function createNewEditorLayer(map: maplibregl.Map): EditLayer {
     const id = uuid();
-    const center = map.getCenter();
+    const center = map.getCenter(); 
+    const sunPos = getSunPosition(center.lat, center.lng);
+
     const sun_options = {
         shadow: true,
-        altitude: 8.9,
-        azimuth: 261.2,
+        altitude: sunPos.altitude,
+        azimuth: sunPos.azimuth,
+        lat : center.lat,
+        lon : center.lng,
     }
     const new_edit_layer = new EditLayer({
         id: id,
@@ -184,6 +188,7 @@ function createDefaultMap(map: maplibregl.Map, overlay_layer: OverlayLayer, outl
         id: 'test_water_layer',
         applyGlobeMatrix: false,
         sourceLayer: 'region_river_index',
+        normalUrl: '/normal/4141-normal.jpg',
         sun: sun_options,
     });
     waterLayer.setVectorSource(customSource);

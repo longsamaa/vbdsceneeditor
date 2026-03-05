@@ -15,7 +15,7 @@ import {InstancedMesh} from 'three';
 import {CustomVectorSource} from "../source/CustomVectorSource.ts"
 import {buildShadowMatrix, calculateSunDirectionMaplibre} from "../shadow/ShadowHelper.ts";
 import InstancedGroupMesh from "./InstancedGroupMesh.ts";
-import {ShadowLitMaterial, InstanceShadowMaterial} from "../shadow/ShadowLitMaterial.ts"
+import {ShadowLitMaterial} from "../shadow/ShadowLitMaterial.ts"
 import {getSharedRenderer} from "../SharedRenderer.ts";
 import {
     calculateTileMatrixThree,
@@ -31,10 +31,15 @@ export type InstanceLayerOpts = {
     objectUrl: string[],
 }
 
+export type InstanceShadowPair = {
+    instanceMesh: InstancedGroupMesh;
+    shadowMesh: InstancedMesh;
+}
+
 export type DataTileInfoForInstanceLayer = {
     sceneTile: THREE.Scene;
     shadowLitMaterials: ShadowLitMaterial[];
-    instanceShadowMaterials: InstanceShadowMaterial[];
+    instanceShadowPairs: InstanceShadowPair[];
 }
 
 export class InstanceLayer implements Custom3DTileRenderLayer {
@@ -60,6 +65,7 @@ export class InstanceLayer implements Custom3DTileRenderLayer {
     private applyGlobeMatrix: boolean | false = false;
     private light: LightGroup | null = null;
     private currentScene: THREE.Scene | null = null;
+    private baseMatrix = new THREE.Matrix4();
     private shadowMatrix = new THREE.Matrix4();
     private finalMatrix = new THREE.Matrix4();
     private sunVector = new THREE.Vector3();
@@ -225,7 +231,7 @@ export class InstanceLayer implements Custom3DTileRenderLayer {
                     tileDataInfo = {
                         sceneTile: scene,
                         shadowLitMaterials: [],
-                        instanceShadowMaterials: [],
+                        instanceShadowPairs: [],
                     };
                     //const dirLight = (this.sun?.sun_dir ?? new THREE.Vector3(0.5, 0.5, 0.5)).clone().normalize();
                     //createLightGroup(scene, dirLight);
@@ -251,16 +257,22 @@ export class InstanceLayer implements Custom3DTileRenderLayer {
                         if (child instanceof THREE.Mesh) {
                             if (this.shadowMaterial) {
                                 const instanceShadow = new InstancedMesh(child.geometry, this.shadowMaterial, object_count);
+                                instanceShadow.name = `instanceShadowMesh_${key}`;
                                 tileDataInfo!.sceneTile.add(instanceShadow);
                                 shadowMeshes.push(instanceShadow);
                             }
                         }
                     });
-                    tileDataInfo.sceneTile.add(instancedObject3d);
+                    tileDataInfo!.sceneTile.add(instancedObject3d);
                     instanceGroups.push(instancedObject3d);
                     shadowMeshGroups.push(shadowMeshes);
+                    for (const sm of shadowMeshes) {
+                        tileDataInfo!.instanceShadowPairs.push({
+                            instanceMesh: instancedObject3d,
+                            shadowMesh: sm,
+                        });
+                    }
                 }
-                const sun_dir = this.sun?.sun_dir;
                 const tmpPos = new THREE.Vector3();
                 const tmpScale = new THREE.Vector3();
                 const tmpQuat = new THREE.Quaternion();
@@ -281,31 +293,16 @@ export class InstanceLayer implements Custom3DTileRenderLayer {
                     tmpMatrix.compose(tmpPos, tmpQuat, tmpScale);
                     const groupIndex = index % instanceGroups.length;
                     const instanceIndex = Math.floor(index / instanceGroups.length);
+                    instanceGroups[groupIndex].setUserDataAt(instanceIndex, {
+                        scale_unit: scaleUnit
+                    });
                     instanceGroups[groupIndex].setMatrixAt(instanceIndex, tmpMatrix);
-                    // tính shadow matrix 1 lần luôn
-                    if (sun_dir && shadowMeshGroups[groupIndex]) {
-                        this.sunVector.set(-sun_dir.x, -sun_dir.y, sun_dir.z / scaleUnit);
-                        buildShadowMatrix(this.sunVector, 0, this.shadowMatrix);
-                        this.finalMatrix.multiplyMatrices(this.shadowMatrix, tmpMatrix);
-                        for (const shadowMesh of shadowMeshGroups[groupIndex]) {
-                            shadowMesh.setMatrixAt(instanceIndex, this.finalMatrix);
-                        }
-                    }
-                }
-                // đánh dấu cập nhật instanceMatrix cho shadow meshes
-                for (const shadowMeshes of shadowMeshGroups) {
-                    for (const sm of shadowMeshes) {
-                        sm.instanceMatrix.needsUpdate = true;
-                    }
                 }
                 // cache materials để updateShadowPass không cần traverse
                 tileDataInfo.sceneTile.traverse((child) => {
                     if (child instanceof THREE.Mesh) {
                         if (child.material instanceof ShadowLitMaterial) {
                             tileDataInfo!.shadowLitMaterials.push(child.material);
-                        }
-                        if (child.material instanceof InstanceShadowMaterial) {
-                            tileDataInfo!.instanceShadowMaterials.push(child.material);
                         }
                     }
                 });
@@ -349,7 +346,9 @@ export class InstanceLayer implements Custom3DTileRenderLayer {
             return;
         }
         this.renderer.resetState();
-        //this.renderer.clearStencil();
+        if(!this.layerSourceCastShadow){
+            this.renderer.clearStencil();
+        }
         for (const tile of visibleTiles) {
             const tile_key = this.tileKey(tile.canonical.x, tile.canonical.y, tile.canonical.z);
             const projectionData = tr.getProjectionData({
@@ -368,6 +367,7 @@ export class InstanceLayer implements Custom3DTileRenderLayer {
                     this.currentScene = tileInfo.sceneTile;
                 }
                 this.updateShadowPass(tileInfo, tile_key);
+                this.updateShadow(tileInfo);
                 this.renderer.render(tileInfo.sceneTile, this.camera);
             }
         }
@@ -392,16 +392,31 @@ export class InstanceLayer implements Custom3DTileRenderLayer {
 
     private updateShadowPass(tileInfo: DataTileInfoForInstanceLayer, tileKey: string): void {
         const shadowParam = this.layerSourceCastShadow?.getShadowParam();
+        const shadowMap = shadowParam?.shadowRenderTarget.getRenderTarget();
+        const lightDir = shadowParam?.lightDir ?? this.sunVector;
         const lightMatrix = this._lightMatrices.get(tileKey);
-        if (!shadowParam || !lightMatrix) return;
-        const shadowMap = shadowParam.shadowRenderTarget.getRenderTarget();
-        const lightDir = shadowParam.lightDir;
         for (const mat of tileInfo.shadowLitMaterials) {
             mat.update(lightMatrix, shadowMap, lightDir);
         }
-        for (const mat of tileInfo.instanceShadowMaterials) {
-            mat.update(lightMatrix, shadowMap);
-        }
     }
 
+    private updateShadow(tileInfo: DataTileInfoForInstanceLayer) {
+        const sun_dir = this.sun?.sun_dir;
+        if (!sun_dir) return;
+        for (const pair of tileInfo.instanceShadowPairs) {
+            const { instanceMesh, shadowMesh } = pair;
+            const count = shadowMesh.count;
+            for (let i = 0; i < count; ++i) {
+                const scaleUnit: number = instanceMesh.getUserDataAt(i)?.scale_unit as number;
+                if (scaleUnit) {
+                    instanceMesh.getMatrixAt(i, this.baseMatrix);
+                    this.sunVector.set(-sun_dir.x, -sun_dir.y, sun_dir.z / scaleUnit);
+                    buildShadowMatrix(this.sunVector, 0, this.shadowMatrix);
+                    this.finalMatrix.multiplyMatrices(this.shadowMatrix, this.baseMatrix);
+                    shadowMesh.setMatrixAt(i, this.finalMatrix);
+                }
+            }
+            shadowMesh.instanceMatrix.needsUpdate = true;
+        }
+    }
 }

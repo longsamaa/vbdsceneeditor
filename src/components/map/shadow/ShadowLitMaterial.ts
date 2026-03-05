@@ -51,9 +51,9 @@ export class ShadowLitMaterial extends THREE.ShaderMaterial {
                 hasAlphaMap:   { value: 0 },
                 alphaTest:     { value: 0.0 },
                 baseColor:     { value: new THREE.Color(1, 1, 1) },
-                colorLift:     { value: 0.1 },
+                colorLift:     { value: 0.0 },
                 ambient:       { value: 0.8 },
-                diffuseIntensity: { value: 0.8 },
+                diffuseIntensity: { value: 1.0 },
                 uOpacity:      { value: 1.0 },
                 shadowStrength: { value: 0.8 },
                 lightColor:    { value: new THREE.Color(1.0, 0.96, 0.88) },
@@ -135,10 +135,7 @@ export class ShadowLitMaterial extends THREE.ShaderMaterial {
                     vec3 N = normalize(vNormal);
                     vec3 L = normalize(lightDir);
                     float NdotL = dot(N, L);
-                    float diffuse = abs(NdotL);
-                    // lighting = ambient + NdotL * diffuseIntensity
-                    // ambient=0.8: mặt khuất giữ 80% albedo
-                    // diffuseIntensity=1.0: mặt sáng nhất = ambient + 1.0 = 1.8 (hơi sáng hơn gốc)
+                    float diffuse = max(NdotL, 0.0);
                     float lighting = ambient + diffuse * diffuseIntensity;
                     vec3 lit = albedo * lightColor * lighting;
                     if (hasShadowMap == 0) {

@@ -16,6 +16,7 @@ export type WaterLayerOpts = {
     id: string;
     applyGlobeMatrix: boolean;
     sourceLayer: string,
+    normalUrl: string,
     sun?: SunOptions;
     minZoom?: number,
     maxZoom?: number,
@@ -33,8 +34,6 @@ export class WaterLayer implements Custom3DTileRenderLayer {
     tileSize: number = 512;
     waterMaterial: THREE.ShaderMaterial | null = null;
     private vectorSource: CustomVectorSource | null = null;
-    //private tileCache: Map<string, DataTileInfoForEditorLayer> = new Map<string, DataTileInfoForEditorLayer>();
-    //private raycaster = new THREE.Raycaster();
     private mainScene: THREE.Scene | null = null;
     private sun: SunParamater | null | undefined;
     private tilekeyToDrawWater: string = '';
@@ -48,6 +47,9 @@ export class WaterLayer implements Custom3DTileRenderLayer {
     private minZoom: number = 0;
     private maxZoom: number = 20;
     private readonly TILE_EXTENT = 8192;
+    private _projMatrix = new THREE.Matrix4();
+    private _visibleTiles: any[] = [];
+    private _zoom: number = 0;
 
     constructor(opts: WaterLayerOpts & { onPick?: (info: PickHit) => void } & { onPickfail?: () => void }) {
         this.id = opts.id;
@@ -56,7 +58,7 @@ export class WaterLayer implements Custom3DTileRenderLayer {
         this.onPickfail = opts.onPickfail;
         this.sourceLayer = opts.sourceLayer;
         this.waterNormalTexture = new THREE.TextureLoader().load(
-            '/normal/4141-normal.jpg',
+            opts.normalUrl,
             (t) => {
                 t.wrapS = t.wrapT = THREE.RepeatWrapping;
             }
@@ -78,7 +80,6 @@ export class WaterLayer implements Custom3DTileRenderLayer {
         if (this.sun) {
             this.waterMaterial.uniforms.lightDir.value = this.sun.sun_dir.clone().normalize();
         }
-        THREE.BufferGeometry
         this.minZoom = opts.minZoom ?? 0;
         this.maxZoom = opts.maxZoom ?? 20;
     }
@@ -112,98 +113,6 @@ export class WaterLayer implements Custom3DTileRenderLayer {
 
     private handleClick = (e: MapMouseEvent) => {
         console.log(e);
-       /* if (!this.map || !this.camera || !this.renderer || !this.visible) {
-            return;
-        }
-        // to NDC [-1..1]
-        const canvas = this.map.getCanvas();
-        const rect = canvas.getBoundingClientRect();
-        const ndc = new THREE.Vector2(
-            ((e.point.x) / rect.width) * 2 - 1,
-            -(((e.point.y) / rect.height) * 2 - 1),
-        );
-        // lấy visible tiles + tile entries đã build scene
-        const zoom = clampZoom(this.editorLevel, this.editorLevel, Math.round(this.map.getZoom()));
-        const visibleTiles = (this.map).coveringTiles({
-            tileSize: this.tileSize,
-            minzoom: zoom,
-            maxzoom: zoom,
-            roundZoom: true,
-        }) as OverscaledTileID[];
-        const tr = (this.map).transform;
-        if (!tr?.getProjectionData) {
-            return;
-        }
-        let bestHit: {
-            dist: number;
-            tileKey: string;
-            overScaledTileID: OverscaledTileID,
-            group: THREE.Object3D
-        } | null = null;
-        for (const tid of visibleTiles) {
-            const canonicalTileID = tid.canonical;
-            const key = this.tileKey(canonicalTileID.x, canonicalTileID.y, canonicalTileID.z);
-            const tile = this.tileCache.get(key);
-            if (!tile?.sceneTile) {
-                continue;
-            }
-
-            const proj = tr.getProjectionData({
-                overscaledTileID: tid,
-                applyGlobeMatrix: this.applyGlobeMatrix,
-            });
-
-            // ---- manual ray from MVP inverse ----
-            const mvp = new THREE.Matrix4().fromArray(proj.mainMatrix);
-            const inv = mvp.clone().invert();
-
-            const pNear = new THREE.Vector4(ndc.x, ndc.y, -1, 1).applyMatrix4(inv);
-            pNear.multiplyScalar(1 / pNear.w);
-
-            const pFar = new THREE.Vector4(ndc.x, ndc.y, 1, 1).applyMatrix4(inv);
-            pFar.multiplyScalar(1 / pFar.w);
-
-            const origin = new THREE.Vector3(pNear.x, pNear.y, pNear.z);
-            const direction = new THREE.Vector3(pFar.x, pFar.y, pFar.z).sub(origin).normalize();
-
-            this.raycaster.ray.origin.copy(origin);
-            this.raycaster.ray.direction.copy(direction);
-
-            const hits = this.raycaster.intersectObjects(tile.sceneTile.children, true);
-            if (hits.length) {
-                const h0 = hits[0];
-                let obj: THREE.Object3D | null = h0.object;
-                while (obj && !obj.userData?.isModelRoot) {
-                    obj = obj.parent as THREE.Object3D;
-                }
-                if (obj) {
-                    if (!bestHit || h0.distance < bestHit.dist) {
-                        bestHit = {
-                            dist: h0.distance,
-                            tileKey: key,
-                            overScaledTileID: tid,
-                            group: obj
-                        };
-                    }
-                }
-            }
-        }
-
-        if (!bestHit) {
-            if (this.onPickfail) {
-                this.onPickfail();
-            }
-            this.map.triggerRepaint();
-            return;
-        }
-        const obj = bestHit.group;
-        this.onPick?.({
-            dist: bestHit.dist,
-            tileKey: bestHit.tileKey,
-            object: obj,
-            overScaledTileId: bestHit.overScaledTileID
-        });
-        this.map.triggerRepaint();*/
     };
 
     prerender(): void {
@@ -211,23 +120,23 @@ export class WaterLayer implements Custom3DTileRenderLayer {
             return;
         }
         if (this.map.getZoom() < this.minZoom) return;
-        const zoom = clampZoom(
+        this._zoom = clampZoom(
             this.vectorSource.minZoom,
             this.vectorSource.maxZoom,
             Math.round(this.map.getZoom())
         );
 
-        const visibleTiles = this.map.coveringTiles({
+        this._visibleTiles = this.map.coveringTiles({
             tileSize: this.tileSize,
-            minzoom: zoom,
-            maxzoom: zoom,
+            minzoom: this._zoom,
+            maxzoom: this._zoom,
             roundZoom: true,
         });
 
         // Cache tiles and check readiness
         let dataNotReady : boolean = false;
         const tileDataMap = new Map();
-        for (const tile of visibleTiles) {
+        for (const tile of this._visibleTiles) {
             const vectorTile = this.vectorSource.getTile(tile, {
                 build_triangle: true,
             });
@@ -244,8 +153,8 @@ export class WaterLayer implements Custom3DTileRenderLayer {
             return;
         }
         const center = this.map.getCenter();
-        const rootTile = latlonToLocal(center.lng, center.lat, zoom);
-        this.tilekeyToDrawWater = this.tileKey(rootTile.tileX, rootTile.tileY, zoom);
+        const rootTile = latlonToLocal(center.lng, center.lat, this._zoom);
+        this.tilekeyToDrawWater = this.tileKey(rootTile.tileX, rootTile.tileY, this._zoom);
         const polygonToMerge: Feature<Polygon>[] = [];
         for (const [tile, vectorTileData] of tileDataMap) {
             const layer = vectorTileData.data?.layers?.[this.sourceLayer];
@@ -327,29 +236,20 @@ export class WaterLayer implements Custom3DTileRenderLayer {
         if (!this.map || !this.camera || !this.renderer || !this.visible || !this.vectorSource || !this.mainScene) {
             return;
         }
-        const zoom = clampZoom(this.vectorSource.minZoom,
-            this.vectorSource.maxZoom,
-            Math.round(this.map.getZoom()));
-        const visibleTiles = this.map.coveringTiles({
-            tileSize: this.tileSize,
-            minzoom: zoom,
-            maxzoom: zoom,
-            roundZoom: true,
-        });
         const tr = this.map.transform;
-        for (const tile of visibleTiles) {
-            const projectionData = tr.getProjectionData({
-                overscaledTileID: tile,
-                applyGlobeMatrix: this.applyGlobeMatrix,
-            });
+        for (const tile of this._visibleTiles) {
             const tile_key = this.tileKey(tile.canonical.x, tile.canonical.y, tile.canonical.z);
             if (tile_key === this.tilekeyToDrawWater) {
-                const tileMatrix = projectionData.mainMatrix;
-                this.camera.projectionMatrix = new THREE.Matrix4().fromArray(tileMatrix);
+                const projectionData = tr.getProjectionData({
+                    overscaledTileID: tile,
+                    applyGlobeMatrix: this.applyGlobeMatrix,
+                });
+                this.camera.projectionMatrix = this._projMatrix.fromArray(projectionData.mainMatrix);
                 this.animate();
                 this.renderer.resetState();
                 this.renderer.render(this.mainScene, this.camera);
                 this.map.triggerRepaint();
+                break;
             }
         }
     }
