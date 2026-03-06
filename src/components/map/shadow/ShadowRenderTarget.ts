@@ -18,10 +18,16 @@ export class ShadowRenderTarget {
         if (!this.shadowTarget) throw new Error('disposed');
         renderer.setRenderTarget(this.shadowTarget);
         // Clear shadow map với depth = 1.0 (xa nhất) để texel trống không gây viền đen
+        //this.clearShadowTarget(renderer); 
+    }
+
+    clearShadowTarget(renderer : THREE.WebGLRenderer) {
+        if (!this.shadowTarget) throw new Error('disposed');
+        renderer.setRenderTarget(this.shadowTarget);
         const oldClearColor = renderer.getClearColor(new THREE.Color());
         const oldClearAlpha = renderer.getClearAlpha();
         renderer.setClearColor(new THREE.Color(1, 1, 1), 1);
-        renderer.clear(true, true, false);
+        renderer.clear(true, true, true);
         renderer.setClearColor(oldClearColor, oldClearAlpha);
     }
 

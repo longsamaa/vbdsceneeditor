@@ -12,7 +12,7 @@ export class ShadowMapPass {
     shadowMatrix = new THREE.Matrix4();
     private readonly _tmpMatrix = new THREE.Matrix4();
     private readonly renderTarget: ShadowRenderTarget;
-
+    private layerOrder : string[] = []; 
     constructor(shadowSize: number = 8192) {
         this.renderTarget = new ShadowRenderTarget(shadowSize);
     }
@@ -24,6 +24,7 @@ export class ShadowMapPass {
     getShadowRenderTarget(): ShadowRenderTarget {
         return this.renderTarget;
     }
+    
 
     calShadowMatrix(tr: any, sunAltitude: number, sunAzimuth: number): void {
         const point = projectToWorldCoordinates(tr.worldSize, {
@@ -53,26 +54,46 @@ export class ShadowMapPass {
         );
     }
 
+    addNewLayer(id : string) {
+        this.layerOrder.push(id); 
+    }
+
+    pushLayerFront(id: string): void {
+        this.layerOrder.unshift(id);
+    }
+
+    pushLayerBack(id: string): void {
+        this.layerOrder.push(id);
+    }
+
     shadowPass(
         renderer: THREE.WebGLRenderer,
         visibleTiles: OverscaledTileID[],
         worldSize: number,
         tileKey: (tile: OverscaledTileID) => string,
         getScene: (key: string) => THREE.Scene | undefined,
+        layerID : string,
     ): void {
-        this.lightMatrices.clear();
+        if(this.layerOrder[0] === layerID){
+            this.renderTarget.clearShadowTarget(renderer);
+            this.lightMatrices.clear();
+        }
+        if (visibleTiles.length === 0) return;
         this.renderTarget.beginRenderShadowPass(renderer);
         for (const tile of visibleTiles) {
             const key = tileKey(tile);
             const scene = getScene(key);
             if (!scene) continue;
             const mat = calculateTileMatrixThree(tile.toUnwrapped(), worldSize);
-            const lightMatrix = this._tmpMatrix.multiplyMatrices(this.shadowMatrix, mat).clone();
+            let lightMatrix = this.lightMatrices.get(key);
+            if(!lightMatrix){
+                lightMatrix = this._tmpMatrix.multiplyMatrices(this.shadowMatrix, mat).clone();
+                this.lightMatrices.set(key, lightMatrix);
+            }
             this.depthMat.uniforms.lightMatrix.value = lightMatrix;
             scene.overrideMaterial = this.depthMat;
             renderer.render(scene, this.camera);
             scene.overrideMaterial = null;
-            this.lightMatrices.set(key, lightMatrix);
         }
         this.renderTarget.endRenderShadowPass(renderer);
     }

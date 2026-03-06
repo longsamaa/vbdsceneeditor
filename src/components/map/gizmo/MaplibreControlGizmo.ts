@@ -6,13 +6,11 @@ export class MaplibreControlGizmo extends TransformControlsGizmo {
         // Override method trực tiếp
         const originalUpdate = this.updateMatrixWorld.bind(this);
         this.updateMatrixWorld = (force: boolean): void => {
-            console.log("maplibre control gizmo updateMatrixWorld called!");
             originalUpdate(force);
         };
     }
 
     updateMatrixWorld(force: boolean) {
         super.updateMatrixWorld(force);
-        console.log("maplibre control gizmo update");
     }
 }

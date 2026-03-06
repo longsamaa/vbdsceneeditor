@@ -65,13 +65,14 @@ function createOutlineLayer(): OutlineLayer {
 
 function createNewEditorLayer(map: maplibregl.Map): EditLayer {
     const id = uuid();
-    const center = map.getCenter(); 
+    const center = map.getCenter();
     const sunPos = getSunPosition(center.lat, center.lng);
-
+    const defaultAltitude = 24.0;
+    const defaultAzimuth = 255.9;
     const sun_options = {
         shadow: true,
-        altitude: sunPos.altitude,
-        azimuth: sunPos.azimuth,
+        altitude: defaultAltitude,
+        azimuth: defaultAzimuth,
         lat : center.lat,
         lon : center.lng,
     }
@@ -85,6 +86,10 @@ function createNewEditorLayer(map: maplibregl.Map): EditLayer {
         onPickfail: () => {
         }
     });
+    const map4d_layer = map.getLayer('test_layer') as unknown as Custom3DTileRenderLayer;
+    if (map4d_layer) {
+        new_edit_layer.setLayerSourceCastShadow(map4d_layer);
+    }
     return new_edit_layer;
 }
 
@@ -102,7 +107,6 @@ function addEditorLayerToMap(
     str_glb_path_array.forEach((path) => {
         loadModelFromGlb(path)
             .then((modeldata) => {
-                console.log(modeldata);
                 new_editor_layer.addObjectsToCache([{
                     id: path,
                     modeldata
@@ -118,6 +122,7 @@ function addEditorLayerToMap(
     if (overlayLayer) {
         map.addLayer(new_editor_layer, overlayLayer.id);
     }
+    else map.addLayer(new_editor_layer); 
 }
 
 
@@ -128,8 +133,8 @@ function createDefaultMap(map: maplibregl.Map, overlay_layer: OverlayLayer, outl
     const sourceLayer = "map4d_3dmodels";
     //add overlay layer
     const sunPos = getSunPosition(center.lat, center.lng);
-    const defaultAltitude = 55.0;
-    const defaultAzimuth = 232.5;
+    const defaultAltitude = 24.0;
+    const defaultAzimuth = 255.9;
     const sun_options = {
         shadow: true,
         altitude: defaultAltitude,
@@ -167,7 +172,6 @@ function createDefaultMap(map: maplibregl.Map, overlay_layer: OverlayLayer, outl
         onPickfail: () => {
             overlay_layer.unselect();
             outline_layer?.unselect();
-            console.log('pick fail');
         }
     });
     map4d_layer.setVectorSource(map4dSource);
@@ -227,8 +231,32 @@ function createDefaultMap(map: maplibregl.Map, overlay_layer: OverlayLayer, outl
         }
     });
     instance_layer.setVectorSource(instanceCustomSource);
-    instance_layer.setLayerSourceCastShadow(map4d_layer); 
+    instance_layer.setLayerSourceCastShadow(map4d_layer);
     map.addLayer(instance_layer);
+
+    // create edit layer
+    const edit_layer = new EditLayer({
+        id: 'edit_layer',
+        sun: sun_options,
+        editorLevel: 16,
+        applyGlobeMatrix: false,
+    });
+    edit_layer.setLayerSourceCastShadow(map4d_layer);
+    map.addLayer(edit_layer);
+    const editModels = [
+        { path: '/test_data/Untitled.glb', lat: 10.793856786820447, lon: 106.71976547330198, scale: 10 },
+        { path: '/test_data/windmill__animated.glb', lat: 10.794683052183178, lon: 106.7191509814821, scale: 20 },
+    ];
+    editModels.forEach(({ path, lat, lon, scale }) => {
+        loadModelFromGlb(path)
+            .then((modeldata) => {
+                edit_layer.addObjectsToCache([{ id: path, modeldata }]);
+                edit_layer.addObjectToScene(path, lat, lon, scale);
+            })
+            .catch((e) => {
+                console.error('Load GLB failed:', path, e);
+            });
+    });
 }
 
 function addControlMaplibre(map: maplibregl.Map): void {
@@ -282,7 +310,6 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(({
         outline_layer.current = createOutlineLayer();
         // Event listeners
         map.current.on('load', () => {
-            console.log('Map loaded successfully');
             if (map.current && overlay_layer.current && outline_layer.current) {
                 //tao lop overlay truoc
                 createDefaultMap(map.current, overlay_layer.current, outline_layer.current);

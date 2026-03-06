@@ -121,7 +121,6 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer {
                 lat: opts.sun.lat,
                 lon: opts.sun.lon,
             }
-            console.log(this.sun);
         }
         const dirLight = (this.sun?.sun_dir ?? new THREE.Vector3(0.5, 0.5, 0.5)).clone().normalize();
         if (this.sun) {
@@ -267,7 +266,8 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer {
         this.map = map;
         this.camera = new THREE.Camera();
         this.renderer = getSharedRenderer(map.getCanvas(), gl);
-        this.shadowMapPass = getSharedShadowPass(8192); 
+        this.shadowMapPass = getSharedShadowPass(8192);
+        this.shadowMapPass.pushLayerBack(this.id); 
         // thêm sự kiện pick
         map.on('click', this.handleClick);
     }
@@ -315,13 +315,29 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer {
 
     shadowPass(tr : any, visibleTiles : OverscaledTileID[]) : void {
         if(!this.shadowMapPass || !this.renderer) return;
+        const tilesWithShadow: TileCacheEntry[] = [];
+        for (const tile of visibleTiles) {
+            const key = this.tileKey(tile);
+            const tileInfo = this.tileCache.get(key);
+            if (!tileInfo || tileInfo.shadowsObject.length === 0) continue;
+            tilesWithShadow.push(tileInfo);
+            for (const pair of tileInfo.shadowsObject) {
+                pair.shadowMesh.visible = false;
+            }
+        }
         this.shadowMapPass.shadowPass(
             this.renderer,
             visibleTiles,
             tr.worldSize,
             (tile) => this.tileKey(tile),
             (key) => this.tileCache.get(key)?.sceneTile,
+            this.id
         );
+        for (const tileInfo of tilesWithShadow) {
+            for (const pair of tileInfo.shadowsObject) {
+                pair.shadowMesh.visible = true;
+            }
+        }
     }
 
     mainPass(tr : any, visibleTiles : OverscaledTileID[]) : void {

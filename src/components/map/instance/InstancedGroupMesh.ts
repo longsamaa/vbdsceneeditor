@@ -38,7 +38,8 @@ class InstancedGroupMesh extends THREE.Group {
                 mat.defines = { ...mat.defines, USE_INSTANCING: '' }
                 mat.needsUpdate = true
             }
-            const instancedMesh = new THREE.InstancedMesh(mesh.geometry, mat, meshes.length * count)
+            const instancedMesh = new THREE.InstancedMesh(mesh.geometry, mat, meshes.length * count); 
+            instancedMesh.frustumCulled = false; 
             instanceCollect[uuid] = instancedMesh
             this.add(instancedMesh)
         })
@@ -46,8 +47,6 @@ class InstancedGroupMesh extends THREE.Group {
     updateMaterial(lightMatrix: THREE.Matrix4 | undefined,
             shadowMap: THREE.WebGLRenderTarget | undefined)
     {
-        console.log(lightMatrix); 
-        console.log(shadowMap); 
         Object.values(this.instanceCollect).forEach(instancedMesh => {
             console.log(instancedMesh.material); 
         })
@@ -71,8 +70,8 @@ class InstancedGroupMesh extends THREE.Group {
         const instancedMesh = this.instanceCollect[uuid]
         // lấy instance đầu tiên của logical index
         const rawIndex = this.meshCollect[uuid].length * index
-        instancedMesh.getMatrixAt(rawIndex, target)
-        return target
+        instancedMesh.getMatrixAt(rawIndex, target);
+        return target; 
     }
     setUserDataAt(index: number, userData: Record<string, unknown>): void {
         if (index < 0 || index >= this.count) {

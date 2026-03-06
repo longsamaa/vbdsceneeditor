@@ -16,7 +16,11 @@ export class ShadowDepthMaterial extends THREE.ShaderMaterial {
                 uniform mat4 lightMatrix;
                 out float vDepth;
                 void main() {
-                    vec4 worldPos = modelMatrix * vec4(position, 1.0);
+                    vec4 localPos = vec4(position, 1.0);
+                    #ifdef USE_INSTANCING
+                        localPos = instanceMatrix * localPos;
+                    #endif
+                    vec4 worldPos = modelMatrix * localPos;
                     vec4 lightClip = lightMatrix * worldPos;
                     gl_Position = lightClip;
                     vDepth = lightClip.z / lightClip.w * 0.5 + 0.5;
@@ -51,7 +55,7 @@ export class ShadowLitMaterial extends THREE.ShaderMaterial {
                 hasAlphaMap:   { value: 0 },
                 alphaTest:     { value: 0.0 },
                 baseColor:     { value: new THREE.Color(1, 1, 1) },
-                colorLift:     { value: 0.0 },
+                colorLift:     { value: 0.1 },
                 ambient:       { value: 0.8 },
                 diffuseIntensity: { value: 1.0 },
                 uOpacity:      { value: 1.0 },
