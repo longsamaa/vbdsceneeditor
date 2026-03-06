@@ -19,20 +19,15 @@ import {
     clampZoom,
     getMetersPerExtentUnit,
     tileLocalToLatLon,
-    projectToWorldCoordinates
 } from '../convert/map_convert.ts';
 import {parseLayerTileInfo} from '../tile/tile.ts';
 import {createBuildingGroup, createLightGroup, createShadowGroup, transformModel, applyShadowLitMaterial} from '../model/objModel.ts'
 import {calculateSunDirectionMaplibre} from '../shadow/ShadowHelper.ts'
-import {MaplibreShadowMesh, GroundShadowMesh} from "../shadow/ShadowGeometry.ts";
+import {MaplibreShadowMesh} from "../shadow/ShadowGeometry.ts";
 import {CustomVectorSource} from "../source/CustomVectorSource.ts"
 import {ModelFetch} from "./ModelFetch.ts";
-import {
-    calculateTileMatrixThree,
-    createShadowMapMatrixOrtho,
-} from "../shadow/ShadowCamera.ts";
-import {ShadowRenderTarget} from "../shadow/ShadowRenderTarget.ts";
-import {ShadowLitMaterial, ShadowDepthMaterial} from "../shadow/ShadowLitMaterial.ts";
+import type {ShadowLitMaterial} from "../shadow/ShadowLitMaterial.ts";
+import {ShadowMapPass,getSharedShadowPass} from "../shadow/ShadowMapPass.ts";
 import {getSharedRenderer} from "../SharedRenderer.ts";
 
 /** Config cho layer */
@@ -65,7 +60,8 @@ type TileCacheEntry = DataTileInfo & {
     sceneTile?: THREE.Scene;
     overScaledTileID?: OverscaledTileID;
     objects?: ObjectInfo[];
-    shadowsObject : ShadowPair[]; 
+    shadowsObject : ShadowPair[];
+    shadowLitMaterials: ShadowLitMaterial[];
     isFullObject: boolean;
 };
 
@@ -83,9 +79,7 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer {
     private modelFetcher: ModelFetch = new ModelFetch(8);
     readonly type = 'custom' as const;
     readonly renderingMode = '3d' as const;
-    private shadowMatrix : THREE.Matrix4 = new THREE.Matrix4();
     private light: LightGroup | null = null;
-    private currentScene: THREE.Scene | null = null;
     private map: maplibregl.Map | null = null;
     private renderer: THREE.WebGLRenderer | null = null;
     private camera: THREE.Camera | null = null;
@@ -101,14 +95,11 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer {
     private raycaster = new THREE.Raycaster();
     private _visibleTiles: OverscaledTileID[] = [];
     private _currentZoom = 0;
-
-      // --- Reusable objects (avoid per-frame allocations) ---
-    private shadow_camera : THREE.Camera | null = null;
-    private readonly _depthMat = new ShadowDepthMaterial();
-    private readonly _lightMatrices = new Map<string, THREE.Matrix4>();
-    private readonly _tmpMatrix = new THREE.Matrix4();
     private readonly _tmpLightDir = new THREE.Vector3();
-    private shadowRenderPass : ShadowRenderTarget | null = null;
+    //shadow 
+    private shadowMapPass: ShadowMapPass | null = null;
+
+
 
     constructor(opts: Map4DModelsLayerOptions & { onPick?: (info: PickHit) => void } & {
         onPickfail?: () => void
@@ -173,36 +164,9 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer {
     }
 
     private calShadowMatrix(_args: CustomRenderMethodInput){
-        if(!this.map || !this.sun) return;
+        if(!this.map || !this.sun || !this.shadowMapPass) return;
         const tr = this.map.transform;
-        const point = projectToWorldCoordinates(tr.worldSize, {
-            lat: tr.center.lat,
-            lon: tr.center.lng,
-        });
-        // Ortho size in world-pixels — match viewport so shadow map covers visible tiles.
-        // Multiply by 2 to include shadow casters just outside the viewport.
-        const shadowW = tr.width * 3;
-        const shadowH = tr.height * 3;
-
-        // Fixed near/far/distance for the light camera (world-pixel units).
-        const shadowFar = tr.cameraToCenterDistance * 5;
-        const shadowNear = 0.1;
-        const shadowDistance = tr.cameraToCenterDistance * 2;
-
-         this.shadowMatrix = createShadowMapMatrixOrtho(
-            point.x,
-            point.y,
-            tr.pixelsPerMeter,
-            shadowW,
-            shadowH,
-            shadowNear,
-            shadowFar,
-            shadowDistance,
-            this.sun.azimuth - 180,
-            90 - this.sun.altitude,
-            0,
-            {x : 0, y : 0},
-            0);
+        this.shadowMapPass.calShadowMatrix(tr, this.sun.altitude, this.sun.azimuth);
     }
 
     prerender(gl, args: CustomRenderMethodInput): void {
@@ -236,7 +200,8 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer {
                     tileDataInfo = {
                         sceneTile: scene,
                         isFullObject: false,
-                        shadowsObject : []
+                        shadowsObject : [],
+                        shadowLitMaterials: [],
                     }
                     createBuildingGroup(scene);
                     createShadowGroup(scene);
@@ -301,9 +266,8 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer {
     onAdd(map: Map, gl: WebGLRenderingContext): void {
         this.map = map;
         this.camera = new THREE.Camera();
-        this.shadow_camera = new THREE.Camera();
         this.renderer = getSharedRenderer(map.getCanvas(), gl);
-        this.shadowRenderPass = new ShadowRenderTarget(8192);
+        this.shadowMapPass = getSharedShadowPass(8192); 
         // thêm sự kiện pick
         map.on('click', this.handleClick);
     }
@@ -350,27 +314,18 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer {
     }
 
     shadowPass(tr : any, visibleTiles : OverscaledTileID[]) : void {
-        if(!this._lightMatrices || !this.shadowRenderPass || !this.renderer || !this.shadow_camera) return; 
-        this._lightMatrices.clear(); 
-        this.shadowRenderPass.beginRenderShadowPass(this.renderer);
-        for(const tile of visibleTiles){
-            const tile_key = this.tileKey(tile);
-                const tileInfo = this.tileCache.get(tile_key);
-                if (!tileInfo?.sceneTile) continue;
-                const mat = calculateTileMatrixThree(tile.toUnwrapped(), tr.worldSize);
-                const light_matrix = this._tmpMatrix.multiplyMatrices(this.shadowMatrix, mat).clone();
-                this._depthMat.uniforms.lightMatrix.value = light_matrix;
-                tileInfo.sceneTile.overrideMaterial = this._depthMat;
-                this.renderer.render(tileInfo.sceneTile, this.shadow_camera);
-                tileInfo.sceneTile.overrideMaterial = null;
-                this._lightMatrices.set(tile_key, light_matrix);
-        }
-        this.shadowRenderPass.endRenderShadowPass(this.renderer);
-
+        if(!this.shadowMapPass || !this.renderer) return;
+        this.shadowMapPass.shadowPass(
+            this.renderer,
+            visibleTiles,
+            tr.worldSize,
+            (tile) => this.tileKey(tile),
+            (key) => this.tileCache.get(key)?.sceneTile,
+        );
     }
 
     mainPass(tr : any, visibleTiles : OverscaledTileID[]) : void {
-        if(!this.renderer || !this.sun || !this.camera) return; 
+        if(!this.renderer || !this.sun || !this.camera || !this.shadowMapPass) return;
         this.renderer.resetState();
         this.renderer.clearStencil();
         this._tmpLightDir.set(-this.sun!.sun_dir.x, -this.sun!.sun_dir.y, this.sun!.sun_dir.z);
@@ -382,10 +337,9 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer {
                 overscaledTileID: tile,
                 applyGlobeMatrix: this.applyGlobeMatrix,
             });
-            const light_matrix = this._lightMatrices.get(tile_key);
-            this.updateShadowPass(tileInfo.sceneTile,light_matrix,this.shadowRenderPass?.getRenderTarget(), this._tmpLightDir);
+            const light_matrix = this.shadowMapPass.lightMatrices.get(tile_key);
+            this.updateShadowLitMaterials(tileInfo, light_matrix, this._tmpLightDir);
             this.camera.projectionMatrix.fromArray(projectionData.mainMatrix);
-            this.updateShadow(tileInfo);
             this.renderer.render(tileInfo.sceneTile, this.camera);
         }
     }
@@ -507,23 +461,12 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer {
         return `${c.z}/${c.x}/${c.y}`;
     }
 
-    private updateShadow(tile: TileCacheEntry) {
-        const sun_dir = this.sun?.sun_dir;
-        if (!sun_dir) {
-            return;
-        }
-        for (const shadow_pair of tile.shadowsObject) {
-            const scale_unit = shadow_pair.scaleUnit; 
-            const mat = shadow_pair.shadowMesh;  
-            mat.update(-sun_dir.x, -sun_dir.y, sun_dir.z / scale_unit)
-        }
-    }
 
     getShadowParam(): ShadowParam | undefined {
-        if (!this.shadowRenderPass || !this.renderer) return undefined;
+        if (!this.shadowMapPass || !this.renderer) return undefined;
         return {
-            shadowRenderTarget: this.shadowRenderPass,
-            shadowMatrix: this.shadowMatrix,
+            shadowRenderTarget: this.shadowMapPass.getShadowRenderTarget(),
+            shadowMatrix: this.shadowMapPass.shadowMatrix,
             lightDir: this._tmpLightDir,
             renderer: this.renderer,
         };
@@ -533,19 +476,24 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer {
         this.layerSourceCastShadow = source;
     }
 
-    private updateShadowPass(
-        scene: THREE.Scene,
+    private updateShadowLitMaterials(
+        tile : TileCacheEntry,
         lightMatrix: THREE.Matrix4 | undefined,
-        shadowMap: THREE.WebGLRenderTarget | undefined,
-        lightDir: THREE.Vector3
+        lightDir: THREE.Vector3,
     ): void {
-        scene.traverse((child) => {
-            if (child instanceof GroundShadowMesh) {
-                child.getGroundShadowMaterial().update(lightMatrix, shadowMap);
-            } else if (child instanceof THREE.Mesh && child.material instanceof ShadowLitMaterial) {
-                child.material.update(lightMatrix, shadowMap, lightDir);
-            }
-        });
+        const shadowMap = this.shadowMapPass?.getRenderTarget();
+        for (const mat of tile.shadowLitMaterials) {
+            mat.update(lightMatrix, shadowMap, lightDir);
+        }
+        const sun_dir = this.sun?.sun_dir;
+        if (!sun_dir) {
+            return;
+        }
+        for (const shadow_pair of tile.shadowsObject) {
+            const scale_unit = shadow_pair.scaleUnit; 
+            const mat = shadow_pair.shadowMesh;  
+            mat.update(-sun_dir.x, -sun_dir.y, sun_dir.z / scale_unit)
+        }
     }
 
     private populateBuildingGroup(overScaledTile: OverscaledTileID, tile: TileCacheEntry) {
@@ -610,7 +558,8 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer {
             };
             cloneObj3d.traverse((child) => {
                 if (child instanceof THREE.Mesh) {
-                    applyShadowLitMaterial(child);
+                    const shadowLitMat = applyShadowLitMaterial(child);
+                    tile.shadowLitMaterials.push(shadowLitMat);
                     // Skip shadow cho model dẹt (z height quá nhỏ)
                     const object_shadow = new MaplibreShadowMesh(child);
                     object_shadow.userData = {

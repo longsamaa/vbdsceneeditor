@@ -21,6 +21,7 @@ import * as THREE from 'three';
 import {MaplibreShadowMesh} from "../shadow/ShadowGeometry.ts";
 import {calculateSunDirectionMaplibre} from "../shadow/ShadowHelper.ts";
 import {getSharedRenderer} from "../SharedRenderer.ts";
+import {ShadowMapPass} from "../shadow/ShadowMapPass.ts";
 
 export type EditorLayerOpts = {
     id: string;
@@ -60,13 +61,12 @@ export class EditLayer implements Custom3DTileRenderLayer {
     private applyGlobeMatrix: boolean | false = false;
     private light: LightGroup | null = null;
     private currentScene: THREE.Scene | null = null;    
-    //shadow pass 
-    private shadow_camera : THREE.Camera | null = null;
-    private shadowRenderPass : ShadowRenderTarget | null = null;
-    private readonly _depthMat = new ShadowDepthMaterial();
+    //light 
     private readonly _lightMatrices = new Map<string, THREE.Matrix4>();
+     private readonly _tmpLightDir = new THREE.Vector3();
+    //shadow pass 
+    private shadowMapPass: ShadowMapPass | null = null;
     
-
     constructor(opts: EditorLayerOpts & { onPick?: (info: PickHit) => void } & { onPickfail?: () => void }) {
         this.id = opts.id;
         this.editorLevel = opts.editorLevel;
