@@ -100,29 +100,41 @@ function addEditorLayerToMap(
     layerMap: Map<string, Custom3DTileRenderLayer> | null | undefined,
 ) {
     if (!map || !outlineLayer) return;
-    const new_editor_layer = createNewEditorLayer(
-        map,
-    );
-    const str_glb_path_array = ['/test_data/Untitled.glb'];
-    str_glb_path_array.forEach((path) => {
-        loadModelFromGlb(path)
-            .then((modeldata) => {
-                new_editor_layer.addObjectsToCache([{
-                    id: path,
-                    modeldata
-                }]);
-                const center = map.getCenter();
-                new_editor_layer.addObjectToScene(path, center.lat, center.lng, 10);
-            })
-            .catch((e) => {
-                console.error('Load GLB failed:', path, e);
-            });
-    });
+    const new_editor_layer = createNewEditorLayer(map);
     layerMap?.set(new_editor_layer.id, new_editor_layer);
-    if (overlayLayer) {
+    // Add edit layer before 4D layer so it renders first
+    const map4dLayerId = import.meta.env.VITE_MAP4D_LAYER_ID ?? 'test_layer';
+    if (map.getLayer(map4dLayerId)) {
+        map.addLayer(new_editor_layer, map4dLayerId);
+    } else if (overlayLayer) {
         map.addLayer(new_editor_layer, overlayLayer.id);
+    } else {
+        map.addLayer(new_editor_layer);
     }
-    else map.addLayer(new_editor_layer); 
+    return new_editor_layer;
+}
+
+function addObjectToEditLayer(
+    map: maplibregl.Map | null,
+    layer: Custom3DTileRenderLayer | null | undefined,
+    file: File,
+) {
+    if (!map || !layer) return;
+    const editLayer = layer as EditLayer;
+    const url = URL.createObjectURL(file);
+    const fileName = file.name;
+    loadModelFromGlb(url)
+        .then((modeldata) => {
+            editLayer.addObjectsToCache([{ id: fileName, modeldata }]);
+            const center = map.getCenter();
+            editLayer.addObjectToScene(fileName, center.lat, center.lng, 10);
+            URL.revokeObjectURL(url);
+            map.triggerRepaint();
+        })
+        .catch((e) => {
+            console.error('Load GLB failed:', fileName, e);
+            URL.revokeObjectURL(url);
+        });
 }
 
 
@@ -175,6 +187,7 @@ function createDefaultMap(map: maplibregl.Map, overlay_layer: OverlayLayer, outl
         }
     });
     map4d_layer.setVectorSource(map4dSource);
+    map4d_layer.getShadowMapPass()?.pushLayerBack(map4d_layer.id); 
     map.addLayer(map4d_layer);
     //create source
     const sourceUrl = 'https://images.daklak.gov.vn/v2/tile/{z}/{x}/{y}/306ec9b5-8146-4a83-9271-bd7b343a574a';
@@ -232,7 +245,9 @@ function createDefaultMap(map: maplibregl.Map, overlay_layer: OverlayLayer, outl
     });
     instance_layer.setVectorSource(instanceCustomSource);
     instance_layer.setLayerSourceCastShadow(map4d_layer);
+    instance_layer.getShadowMapPass()?.pushLayerBack(instance_layer.id); 
     map.addLayer(instance_layer);
+
 
     // create edit layer
     const edit_layer = new EditLayer({
@@ -240,9 +255,19 @@ function createDefaultMap(map: maplibregl.Map, overlay_layer: OverlayLayer, outl
         sun: sun_options,
         editorLevel: 16,
         applyGlobeMatrix: false,
+        onPick: (info) => {
+            overlay_layer.setCurrentTileID(info.overScaledTileId);
+            overlay_layer.attachGizmoToObject(info.object);
+            outline_layer.setCurrentTileID(info.overScaledTileId);
+            outline_layer.attachObject(info.object);
+        },
+        onPickfail: () => {
+            overlay_layer.unselect();
+            outline_layer.unselect();
+        }
     });
-    edit_layer.setLayerSourceCastShadow(map4d_layer);
-    map.addLayer(edit_layer);
+    edit_layer.getShadowMapPass()?.pushLayerFront(edit_layer.id); 
+    map.addLayer(edit_layer,map4d_layer.id);
     const editModels = [
         { path: '/test_data/Untitled.glb', lat: 10.793856786820447, lon: 106.71976547330198, scale: 10 },
         { path: '/test_data/windmill__animated.glb', lat: 10.794683052183178, lon: 106.7191509814821, scale: 20 },
@@ -257,6 +282,7 @@ function createDefaultMap(map: maplibregl.Map, overlay_layer: OverlayLayer, outl
                 console.error('Load GLB failed:', path, e);
             });
     });
+    map4d_layer.setLayerSourceCastShadow(edit_layer); 
 }
 
 function addControlMaplibre(map: maplibregl.Map): void {
@@ -423,6 +449,10 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(({
                         layer.visible = visible;
                     }
                     map.current?.triggerRepaint();
+                }}
+                onAddObject={(layerId, file) => {
+                    const layer = editorLayerManager?.current?.layer_cache.get(layerId);
+                    addObjectToEditLayer(map.current, layer, file);
                 }}
                 onDeleteLayer={(id) => {
                     const layer = editorLayerManager?.current?.layer_cache.get(id);

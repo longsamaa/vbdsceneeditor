@@ -128,8 +128,10 @@ export class InstanceLayer implements Custom3DTileRenderLayer {
         this.camera.matrixAutoUpdate = false;
         this.renderer = getSharedRenderer(map.getCanvas(), gl);
         map.on('click', this.handleClick);
-        this.shadowMapPass = getSharedShadowPass(8192);
-        this.shadowMapPass.pushLayerBack(this.id);  
+        if(!this.shadowMapPass)
+        {
+            this.shadowMapPass = getSharedShadowPass(8192); 
+        }
         //load glb file
         this.objectUrls.forEach((url) => {
             loadModelFromGlb(url).then((model_data) => {
@@ -416,6 +418,14 @@ export class InstanceLayer implements Custom3DTileRenderLayer {
 
     getShadowParam() {
         return undefined;
+    }
+
+    getShadowMapPass(): ShadowMapPass | null {
+        if(!this.shadowMapPass)
+        {
+            this.shadowMapPass = getSharedShadowPass(8192); 
+        }
+        return this.shadowMapPass;
     }
 
     setLayerSourceCastShadow(source: Custom3DTileRenderLayer): void {

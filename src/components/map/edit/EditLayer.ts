@@ -130,8 +130,10 @@ export class EditLayer implements Custom3DTileRenderLayer {
         this.camera = new THREE.Camera();
         this.camera.matrixAutoUpdate = false;
         this.renderer = getSharedRenderer(map.getCanvas(), gl);
-        this.shadowMapPass = getSharedShadowPass(8192);
-        this.shadowMapPass.pushLayerFront(this.id);
+         if(!this.shadowMapPass)
+        {
+            this.shadowMapPass = getSharedShadowPass(8192); 
+        }
         this.clock = new THREE.Clock();
         const layers = map.getStyle().layers;
         map.on('click', this.handleClick);
@@ -305,6 +307,10 @@ export class EditLayer implements Custom3DTileRenderLayer {
 
     mainPass(tr : any, visibleTiles : OverscaledTileID[]){
         if(!this.renderer || !this.camera) return; 
+        this.renderer.resetState();
+        if(!this.layerSourceCastShadow){
+            this.renderer.clearStencil();
+        }
         for (const tile of visibleTiles) {
             const tile_key = this.tileKey(tile.canonical.x, tile.canonical.y, tile.canonical.z);
             const projectionData = tr.getProjectionData({
@@ -341,10 +347,6 @@ export class EditLayer implements Custom3DTileRenderLayer {
         });
         const tr = this.map.transform;
         this.shadowPass(tr, visibleTiles);
-        this.renderer.resetState();
-        if(!this.layerSourceCastShadow){
-            this.renderer.clearStencil();
-        }
         this.mainPass(tr, visibleTiles);
     }
 
@@ -448,6 +450,14 @@ export class EditLayer implements Custom3DTileRenderLayer {
         return undefined;
     }
 
+    getShadowMapPass(): ShadowMapPass | null {
+        if(!this.shadowMapPass)
+        {
+            this.shadowMapPass = getSharedShadowPass(8192); 
+        }
+        return this.shadowMapPass;
+    }
+
     setLayerSourceCastShadow(source: Custom3DTileRenderLayer): void {
         this.layerSourceCastShadow = source;
     }
@@ -463,7 +473,6 @@ export class EditLayer implements Custom3DTileRenderLayer {
         for (const pair of tileInfo.shadowMaterials) {
             const shadow_mesh = pair.shadowMesh;
             const scaleUnit = pair.scaleUnit;
-            console.log(this._tmpLightDir); 
             shadow_mesh.update(this._tmpLightDir.x, this._tmpLightDir.y, this._tmpLightDir.z / scaleUnit);
         }
     }

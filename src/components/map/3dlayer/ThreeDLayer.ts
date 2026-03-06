@@ -266,8 +266,10 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer {
         this.map = map;
         this.camera = new THREE.Camera();
         this.renderer = getSharedRenderer(map.getCanvas(), gl);
-        this.shadowMapPass = getSharedShadowPass(8192);
-        this.shadowMapPass.pushLayerBack(this.id); 
+        if(!this.shadowMapPass)
+        {
+            this.shadowMapPass = getSharedShadowPass(8192); 
+        }
         // thêm sự kiện pick
         map.on('click', this.handleClick);
     }
@@ -331,7 +333,7 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer {
             tr.worldSize,
             (tile) => this.tileKey(tile),
             (key) => this.tileCache.get(key)?.sceneTile,
-            this.id
+            this.id,
         );
         for (const tileInfo of tilesWithShadow) {
             for (const pair of tileInfo.shadowsObject) {
@@ -343,7 +345,9 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer {
     mainPass(tr : any, visibleTiles : OverscaledTileID[]) : void {
         if(!this.renderer || !this.sun || !this.camera || !this.shadowMapPass) return;
         this.renderer.resetState();
-        this.renderer.clearStencil();
+        if(!this.layerSourceCastShadow){
+            this.renderer.clearStencil();
+        }
         this._tmpLightDir.set(-this.sun!.sun_dir.x, -this.sun!.sun_dir.y, this.sun!.sun_dir.z);
         for (const tile of visibleTiles) {
             const tile_key = this.tileKey(tile);
@@ -486,6 +490,14 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer {
             lightDir: this._tmpLightDir,
             renderer: this.renderer,
         };
+    }
+
+    getShadowMapPass(): ShadowMapPass | null {
+        if(!this.shadowMapPass)
+        {
+            this.shadowMapPass = getSharedShadowPass(8192); 
+        }
+        return this.shadowMapPass;
     }
 
     setLayerSourceCastShadow(source: Custom3DTileRenderLayer): void {

@@ -72,9 +72,9 @@ export class ShadowMapPass {
         worldSize: number,
         tileKey: (tile: OverscaledTileID) => string,
         getScene: (key: string) => THREE.Scene | undefined,
-        layerID : string,
+        layerID: string,
     ): void {
-        if(this.layerOrder[0] === layerID){
+        if (this.layerOrder[0] === layerID) {
             this.renderTarget.clearShadowTarget(renderer);
             this.lightMatrices.clear();
         }

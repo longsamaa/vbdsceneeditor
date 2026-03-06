@@ -55,12 +55,18 @@ export class ShadowLitMaterial extends THREE.ShaderMaterial {
                 hasAlphaMap:   { value: 0 },
                 alphaTest:     { value: 0.0 },
                 baseColor:     { value: new THREE.Color(1, 1, 1) },
-                colorLift:     { value: 0.1 },
+                colorLift:     { value: 0.0 },
                 ambient:       { value: 0.8 },
                 diffuseIntensity: { value: 1.0 },
                 uOpacity:      { value: 1.0 },
                 shadowStrength: { value: 0.8 },
                 lightColor:    { value: new THREE.Color(1.0, 0.96, 0.88) },
+                skyColor:      { value: new THREE.Color(0.85, 0.85, 0.87) },
+                groundColor:   { value: new THREE.Color(0.6, 0.58, 0.56) },
+                shadowColor:   { value: new THREE.Color(0.5, 0.5, 0.52) },
+                fresnelPower:  { value: 4.0 },
+                fresnelScale:  { value: 0.08 },
+                wrapFactor:    { value: 0.3 },
                 biasBase:      { value: 0.0001 },
                 biasSlope:     { value: 0.0001 },
             },
@@ -68,7 +74,9 @@ export class ShadowLitMaterial extends THREE.ShaderMaterial {
                 uniform mat4 lightMatrix;
                 out vec3 vLightNDC;
                 out vec2 vUv;
+                out vec3 vWorldPos;
                 varying vec3 vNormal;
+                varying vec3 vViewDir;
                 #ifdef USE_VERTEX_COLOR
                     attribute vec3 color;
                     varying vec3 vColor;
@@ -85,10 +93,13 @@ export class ShadowLitMaterial extends THREE.ShaderMaterial {
                         localNormal = mat3(instanceMatrix) * localNormal;
                     #endif
                     vec4 worldPos = modelMatrix * localPos;
-                    gl_Position = projectionMatrix * viewMatrix * worldPos;
+                    vWorldPos = worldPos.xyz;
+                    vec4 viewPos = viewMatrix * worldPos;
+                    gl_Position = projectionMatrix * viewPos;
                     vec4 lightClip = lightMatrix * worldPos;
                     vLightNDC = lightClip.xyz / lightClip.w;
                     vNormal = normalize(mat3(modelMatrix) * localNormal);
+                    vViewDir = normalize(-viewPos.xyz);
                 }
             `,
             fragmentShader: /* glsl */`
@@ -108,16 +119,51 @@ export class ShadowLitMaterial extends THREE.ShaderMaterial {
                 uniform float uOpacity;
                 uniform float shadowStrength;
                 uniform vec3 lightColor;
+                uniform vec3 skyColor;
+                uniform vec3 groundColor;
+                uniform vec3 shadowColor;
+                uniform float fresnelPower;
+                uniform float fresnelScale;
+                uniform float wrapFactor;
                 uniform float biasBase;
                 uniform float biasSlope;
                 in vec3 vLightNDC;
                 in vec2 vUv;
+                in vec3 vWorldPos;
                 varying vec3 vNormal;
+                varying vec3 vViewDir;
                 #ifdef USE_VERTEX_COLOR
                     varying vec3 vColor;
                 #endif
+
+                // Gaussian-weighted 5x5 PCF for smoother shadow edges
+                float sampleShadowPCF(vec3 projCoords, float bias) {
+                    vec2 texelSize = 1.0 / shadowMapSize;
+                    float current = projCoords.z;
+                    // 5x5 Gaussian kernel weights (sigma ~1.5)
+                    float weights[25];
+                    weights[0]=1.0; weights[1]=2.0; weights[2]=3.0; weights[3]=2.0; weights[4]=1.0;
+                    weights[5]=2.0; weights[6]=4.0; weights[7]=6.0; weights[8]=4.0; weights[9]=2.0;
+                    weights[10]=3.0;weights[11]=6.0;weights[12]=9.0;weights[13]=6.0;weights[14]=3.0;
+                    weights[15]=2.0;weights[16]=4.0;weights[17]=6.0;weights[18]=4.0;weights[19]=2.0;
+                    weights[20]=1.0;weights[21]=2.0;weights[22]=3.0;weights[23]=2.0;weights[24]=1.0;
+                    float shadow = 0.0;
+                    float totalWeight = 0.0;
+                    int idx = 0;
+                    for (int y = -2; y <= 2; y++) {
+                        for (int x = -2; x <= 2; x++) {
+                            float w = weights[idx];
+                            float stored = texture2D(shadowMap, projCoords.xy + vec2(x, y) * texelSize).r;
+                            shadow += w * ((current - bias > stored) ? 0.0 : 1.0);
+                            totalWeight += w;
+                            idx++;
+                        }
+                    }
+                    return shadow / totalWeight;
+                }
+
                 void main() {
-                    // Sample base color from original texture, vertex color, or flat color
+                    // --- Albedo ---
                     vec3 albedo = baseColor;
                     float alpha = uOpacity;
                     #ifdef USE_VERTEX_COLOR
@@ -128,47 +174,56 @@ export class ShadowLitMaterial extends THREE.ShaderMaterial {
                         albedo *= tex.rgb;
                         alpha *= tex.a;
                     }
-                    // Alpha map (separate alpha texture)
                     if (hasAlphaMap == 1) {
                         alpha *= texture2D(alphaMap, vUv).r;
                     }
-                    // Alpha test discard
                     if (alphaTest > 0.0 && alpha < alphaTest) discard;
-                    // Lighten albedo naturally: mix toward white
                     albedo = mix(albedo, vec3(1.0), colorLift);
+
                     vec3 N = normalize(vNormal);
                     vec3 L = normalize(lightDir);
+                    vec3 V = normalize(vViewDir);
+
+                    // --- Hemisphere ambient (sky + ground) ---
+                    float hemiMix = N.z * 0.5 + 0.5; // z-up: 1=sky, 0=ground
+                    vec3 ambientColor = mix(groundColor, skyColor, hemiMix) * ambient;
+
+                    // --- Wrap diffuse (softer light/shadow transition) ---
                     float NdotL = dot(N, L);
-                    float diffuse = max(NdotL, 0.0);
-                    float lighting = ambient + diffuse * diffuseIntensity;
-                    vec3 lit = albedo * lightColor * lighting;
+                    float wrapDiffuse = max((NdotL + wrapFactor) / (1.0 + wrapFactor), 0.0);
+                    vec3 directLight = lightColor * wrapDiffuse * diffuseIntensity;
+
+                    // --- Fresnel rim light ---
+                    float fresnel = fresnelScale * pow(1.0 - max(dot(N, V), 0.0), fresnelPower);
+                    vec3 rimLight = skyColor * fresnel;
+
+                    // --- Combine lighting (no shadow) ---
+                    vec3 lit = albedo * (ambientColor + directLight) + rimLight;
+
                     if (hasShadowMap == 0) {
                         gl_FragColor = vec4(lit, alpha);
                         return;
                     }
+
+                    // --- Shadow sampling ---
                     vec3 projCoords = vLightNDC * 0.5 + 0.5;
-                    // outside shadow map → fully lit
                     if (projCoords.x < 0.0 || projCoords.x > 1.0 ||
                         projCoords.y < 0.0 || projCoords.y > 1.0 ||
                         projCoords.z > 1.0) {
                         gl_FragColor = vec4(lit, alpha);
                         return;
                     }
-                    float bias = biasBase + biasSlope * (1.0 - diffuse);
-                    float current = projCoords.z;
-                    vec2 texelSize = 1.0 / shadowMapSize;
-                    // PCF 7x7 soft shadow (49 samples)
-                    float shadow = 0.0;
-                    for (int x = -3; x <= 3; x++) {
-                        for (int y = -3; y <= 3; y++) {
-                            float stored = texture2D(shadowMap, projCoords.xy + vec2(x, y) * texelSize).r;
-                            shadow += (current - bias > stored) ? 0.0 : 1.0;
-                        }
-                    }
-                    shadow /= 49.0;
-                    // shadow: 1.0 = fully lit, 0.0 = fully shadowed
-                    float shadowLighting = mix(ambient * shadowStrength, lighting, shadow);
-                    gl_FragColor = vec4(albedo * lightColor * shadowLighting, alpha);
+
+                    float bias = biasBase + biasSlope * (1.0 - max(NdotL, 0.0));
+                    float shadow = sampleShadowPCF(projCoords, bias);
+
+                    // --- Shadow with colored tint (blue-ish cool shadow) ---
+                    // In shadow: use ambient + shadow color tint instead of just darkening
+                    vec3 shadowLit = albedo * (ambientColor * shadowStrength + shadowColor * (1.0 - shadow) * 0.08);
+                    vec3 fullLit = albedo * (ambientColor + directLight) + rimLight;
+                    vec3 finalColor = mix(shadowLit, fullLit, shadow);
+
+                    gl_FragColor = vec4(finalColor, alpha);
                 }
             `,
         });
@@ -211,6 +266,27 @@ export class ShadowLitMaterial extends THREE.ShaderMaterial {
     setLighting(ambient: number, diffuseIntensity: number): void {
         this.uniforms.ambient.value = ambient;
         this.uniforms.diffuseIntensity.value = diffuseIntensity;
+    }
+
+    setSkyColor(color: THREE.Color): void {
+        this.uniforms.skyColor.value.copy(color);
+    }
+
+    setGroundColor(color: THREE.Color): void {
+        this.uniforms.groundColor.value.copy(color);
+    }
+
+    setShadowColor(color: THREE.Color): void {
+        this.uniforms.shadowColor.value.copy(color);
+    }
+
+    setFresnel(scale: number, power: number): void {
+        this.uniforms.fresnelScale.value = scale;
+        this.uniforms.fresnelPower.value = power;
+    }
+
+    setWrapFactor(factor: number): void {
+        this.uniforms.wrapFactor.value = factor;
     }
 
     /** Call before each mesh render to inject its original texture */

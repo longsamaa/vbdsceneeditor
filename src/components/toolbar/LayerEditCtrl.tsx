@@ -1,6 +1,6 @@
-import {useEffect, useState} from 'react';
+import {useEffect, useRef, useState} from 'react';
 import './LayerEditCtrl.css';
-import {Layers, X, Eye, EyeOff, Trash2} from 'lucide-react';
+import {Layers, X, Eye, EyeOff, Trash2, Plus} from 'lucide-react';
 
 export interface EditableLayer {
     id: string;
@@ -15,6 +15,7 @@ interface Props {
     onVisibleLayer: (id: string, visible: boolean) => void;
     onDeleteLayer : (id : string) => void;
     onAdd: () => void;
+    onAddObject?: (layerId: string, file: File) => void;
 }
 
 export const LayerEditControl = ({
@@ -23,10 +24,12 @@ export const LayerEditControl = ({
                                      onAdd,
                                      onVisibleLayer,
                                      onDeleteLayer,
+                                     onAddObject,
                                  }: Props) => {
     const [open, setOpen] = useState(false);
     const [activeLayerId, setActiveLayerId] = useState<string | null>(null);
     const [visibleMap, setVisibleMap] = useState<Record<string, boolean>>({});
+    const fileInputRef = useRef<HTMLInputElement>(null);
     useEffect(() => {
         const next: Record<string, boolean> = {};
         for (const layer of layers) {
@@ -111,6 +114,29 @@ export const LayerEditControl = ({
                             </div>
                         ))}
                     </div>
+                    {activeLayerId && (
+                        <>
+                            <input
+                                ref={fileInputRef}
+                                type="file"
+                                accept=".glb,.gltf"
+                                style={{display: 'none'}}
+                                onChange={(e) => {
+                                    const file = e.target.files?.[0];
+                                    if (file && activeLayerId && onAddObject) {
+                                        onAddObject(activeLayerId, file);
+                                    }
+                                    e.target.value = '';
+                                }}
+                            />
+                            <button
+                                className="lec-add-object-btn"
+                                onClick={() => fileInputRef.current?.click()}
+                            >
+                                <Plus size={14} strokeWidth={2}/> Add object (.glb)
+                            </button>
+                        </>
+                    )}
                     <button
                         className="lec-add-btn"
                         onClick={onAdd}
