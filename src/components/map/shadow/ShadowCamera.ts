@@ -208,7 +208,7 @@ export function createSunOrthoShadowMatrix(
     // Scale Z — AFTER translate, BEFORE elevation (same position as MapLibre main camera)
     mat.multiply(new THREE.Matrix4().makeScale(1, 1, pixelPerMeter));
     // Elevation offset
-    mat.multiply(new THREE.Matrix4().makeTranslation(0, 0, -elevation));
+    //mat.multiply(new THREE.Matrix4().makeTranslation(0, 0, -elevation));
     return mat;
 }
 

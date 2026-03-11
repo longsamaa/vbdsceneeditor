@@ -15,7 +15,10 @@ export class CustomEditLayerManager {
         }
     }
     setCurrentLayer(id : string) {
-        this.current_layer = null;
+        if (this.current_layer) {
+            this.current_layer.onPick = undefined;
+            this.current_layer.onPickfail = undefined;
+        }
         this.current_layer = this.layer_cache.get(id) ?? null;
     }
     setPickHandler(cb: (info: PickHit) => void) {

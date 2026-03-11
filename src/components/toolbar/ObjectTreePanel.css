@@ -1,0 +1,116 @@
+.otp-container {
+    position: absolute;
+    left: 10px;
+    top: 150px;
+    z-index: 2000;
+    font-family: system-ui, sans-serif;
+}
+.otp-panel {
+    width: 240px;
+    max-height: 400px;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+}
+.otp-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-weight: 600;
+    font-size: 14px;
+    margin-bottom: 6px;
+}
+.otp-close {
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    font-size: 16px;
+}
+.otp-tree {
+    overflow-y: auto;
+    flex: 1;
+    padding: 2px;
+}
+.otp-tree::-webkit-scrollbar {
+    width: 6px;
+}
+.otp-tree::-webkit-scrollbar-track {
+    background: transparent;
+}
+.otp-tree::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.25);
+    border-radius: 4px;
+}
+.otp-tree::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 0, 0, 0.4);
+}
+/* tile group */
+.otp-tile {
+    margin-bottom: 4px;
+}
+.otp-tile-header {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 6px;
+    font-size: 12px;
+    font-weight: 600;
+    color: rgba(32, 32, 32, 0.7);
+    cursor: pointer;
+    border-radius: 4px;
+    user-select: none;
+}
+.otp-tile-header:hover {
+    background: rgba(0, 0, 0, 0.04);
+}
+.otp-tile-header svg {
+    transition: transform 0.15s ease;
+}
+.otp-tile-header.collapsed svg {
+    transform: rotate(-90deg);
+}
+.otp-tile-count {
+    margin-left: auto;
+    font-weight: 400;
+    font-size: 11px;
+    color: rgba(32, 32, 32, 0.4);
+}
+/* object item */
+.otp-object {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 6px 3px 24px;
+    font-size: 12px;
+    color: rgba(32, 32, 32, 0.85);
+    cursor: pointer;
+    border-radius: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.otp-object:hover {
+    background: rgba(0, 0, 0, 0.04);
+}
+.otp-object.selected {
+    background: rgba(66, 133, 244, 0.12);
+    color: #1a73e8;
+}
+.otp-object-icon {
+    flex-shrink: 0;
+    color: rgba(32, 32, 32, 0.5);
+}
+.otp-object-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.otp-empty {
+    text-align: center;
+    font-size: 12px;
+    color: rgba(32, 32, 32, 0.4);
+    padding: 16px 8px;
+}

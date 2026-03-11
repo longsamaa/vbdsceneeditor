@@ -7,8 +7,8 @@ export class ShadowDepthMaterial extends THREE.ShaderMaterial {
             side: THREE.DoubleSide,
             depthWrite: true,
             polygonOffset: true,
-            polygonOffsetFactor: 8,
-            polygonOffsetUnits: 8,
+            polygonOffsetFactor: 4,
+            polygonOffsetUnits: 4,
             uniforms: {
                 lightMatrix: { value: new THREE.Matrix4() },
             },
@@ -67,8 +67,9 @@ export class ShadowLitMaterial extends THREE.ShaderMaterial {
                 fresnelPower:  { value: 4.0 },
                 fresnelScale:  { value: 0.08 },
                 wrapFactor:    { value: 0.3 },
-                biasBase:      { value: 0.0001 },
-                biasSlope:     { value: 0.0001 },
+                biasBase:      { value: 0.00001 },
+                biasSlope:     { value: 0.000001 },
+                shadowThreshold: { value: 0.6 },
             },
             vertexShader: /* glsl */`
                 uniform mat4 lightMatrix;
@@ -127,6 +128,7 @@ export class ShadowLitMaterial extends THREE.ShaderMaterial {
                 uniform float wrapFactor;
                 uniform float biasBase;
                 uniform float biasSlope;
+                uniform float shadowThreshold;
                 in vec3 vLightNDC;
                 in vec2 vUv;
                 in vec3 vWorldPos;
@@ -140,18 +142,20 @@ export class ShadowLitMaterial extends THREE.ShaderMaterial {
                 float sampleShadowPCF(vec3 projCoords, float bias) {
                     vec2 texelSize = 1.0 / shadowMapSize;
                     float current = projCoords.z;
-                    // 5x5 Gaussian kernel weights (sigma ~1.5)
-                    float weights[25];
-                    weights[0]=1.0; weights[1]=2.0; weights[2]=3.0; weights[3]=2.0; weights[4]=1.0;
-                    weights[5]=2.0; weights[6]=4.0; weights[7]=6.0; weights[8]=4.0; weights[9]=2.0;
-                    weights[10]=3.0;weights[11]=6.0;weights[12]=9.0;weights[13]=6.0;weights[14]=3.0;
-                    weights[15]=2.0;weights[16]=4.0;weights[17]=6.0;weights[18]=4.0;weights[19]=2.0;
-                    weights[20]=1.0;weights[21]=2.0;weights[22]=3.0;weights[23]=2.0;weights[24]=1.0;
+                    // 7x7 Gaussian kernel weights (sigma ~2.0)
+                    float weights[49];
+                    weights[0]=1.0; weights[1]=2.0; weights[2]=3.0; weights[3]=4.0; weights[4]=3.0; weights[5]=2.0; weights[6]=1.0;
+                    weights[7]=2.0; weights[8]=4.0; weights[9]=6.0; weights[10]=8.0;weights[11]=6.0; weights[12]=4.0;weights[13]=2.0;
+                    weights[14]=3.0;weights[15]=6.0;weights[16]=9.0;weights[17]=12.0;weights[18]=9.0;weights[19]=6.0;weights[20]=3.0;
+                    weights[21]=4.0;weights[22]=8.0;weights[23]=12.0;weights[24]=16.0;weights[25]=12.0;weights[26]=8.0;weights[27]=4.0;
+                    weights[28]=3.0;weights[29]=6.0;weights[30]=9.0;weights[31]=12.0;weights[32]=9.0;weights[33]=6.0;weights[34]=3.0;
+                    weights[35]=2.0;weights[36]=4.0;weights[37]=6.0;weights[38]=8.0;weights[39]=6.0;weights[40]=4.0;weights[41]=2.0;
+                    weights[42]=1.0;weights[43]=2.0;weights[44]=3.0;weights[45]=4.0;weights[46]=3.0;weights[47]=2.0;weights[48]=1.0;
                     float shadow = 0.0;
                     float totalWeight = 0.0;
                     int idx = 0;
-                    for (int y = -2; y <= 2; y++) {
-                        for (int x = -2; x <= 2; x++) {
+                    for (int y = -3; y <= 3; y++) {
+                        for (int x = -3; x <= 3; x++) {
                             float w = weights[idx];
                             float stored = texture2D(shadowMap, projCoords.xy + vec2(x, y) * texelSize).r;
                             shadow += w * ((current - bias > stored) ? 0.0 : 1.0);
@@ -213,9 +217,17 @@ export class ShadowLitMaterial extends THREE.ShaderMaterial {
                         gl_FragColor = vec4(lit, alpha);
                         return;
                     }
-
                     float bias = biasBase + biasSlope * (1.0 - max(NdotL, 0.0));
-                    float shadow = sampleShadowPCF(projCoords, bias);
+                    vec2 texelSize = 1.0 / shadowMapSize;
+                    float current = projCoords.z;
+                    float shadow = sampleShadowPCF(projCoords,bias);
+                    // for (int y = -2; y <= 2; y++) {
+                    //     for (int x = -2; x <= 2; x++) {
+                    //         float stored = texture2D(shadowMap, projCoords.xy + vec2(x, y) * texelSize).r;
+                    //         shadow += (current - bias > stored) ? 0.0 : 1.0;
+                    //     }
+                    // }
+                    // shadow /= 25.0;
 
                     // --- Shadow with colored tint (blue-ish cool shadow) ---
                     // In shadow: use ambient + shadow color tint instead of just darkening
@@ -263,6 +275,10 @@ export class ShadowLitMaterial extends THREE.ShaderMaterial {
         this.uniforms.biasSlope.value = slope;
     }
 
+    setShadowThreshold(threshold: number): void {
+        this.uniforms.shadowThreshold.value = threshold;
+    }
+
     setLighting(ambient: number, diffuseIntensity: number): void {
         this.uniforms.ambient.value = ambient;
         this.uniforms.diffuseIntensity.value = diffuseIntensity;
@@ -293,20 +309,38 @@ export class ShadowLitMaterial extends THREE.ShaderMaterial {
     setMeshMaterial(originalMaterial: THREE.Material | null): void {
         if (!originalMaterial) {
             this.uniforms.hasBaseMap.value = 0;
+            this.uniforms.hasAlphaMap.value = 0;
+            this.uniforms.alphaTest.value = 0.0;
             this.uniforms.baseColor.value.set(1, 1, 1);
+            this.transparent = false;
             return;
         }
-        const mat = originalMaterial as THREE.MeshStandardMaterial | THREE.MeshBasicMaterial | THREE.MeshPhongMaterial;
+        const mat = originalMaterial as THREE.MeshStandardMaterial;
         if (mat.map) {
             this.uniforms.baseMap.value = mat.map;
             this.uniforms.hasBaseMap.value = 1;
         } else {
             this.uniforms.hasBaseMap.value = 0;
         }
+        if (mat.alphaMap) {
+            this.uniforms.alphaMap.value = mat.alphaMap;
+            this.uniforms.hasAlphaMap.value = 1;
+        } else {
+            this.uniforms.hasAlphaMap.value = 0;
+        }
         if (mat.color) {
             this.uniforms.baseColor.value.copy(mat.color);
         } else {
             this.uniforms.baseColor.value.set(1, 1, 1);
+        }
+        // Transfer alpha settings from original material
+        const needsAlpha = mat.transparent || mat.alphaTest > 0 || (mat.map?.format === THREE.RGBAFormat);
+        if (needsAlpha) {
+            this.uniforms.alphaTest.value = mat.alphaTest > 0 ? mat.alphaTest : 0.5;
+            this.transparent = mat.transparent;
+        } else {
+            this.uniforms.alphaTest.value = 0.0;
+            this.transparent = false;
         }
     }
 }
@@ -439,7 +473,7 @@ export class InstanceShadowMaterial extends THREE.ShaderMaterial {
                 hasShadowMap:    { value: 0 },
                 shadowBrightness: { value: 0.4 },
                 biasBase:        { value: 0.0001 },
-                biasSlope:       { value: 0.0 },
+                biasSlope:       { value: 0.000001 },
             },
             vertexShader: /* glsl */`
                 uniform mat4 lightMatrix;

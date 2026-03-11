@@ -257,7 +257,7 @@ export function createWaterMaterial(opts: WaterOpts): THREE.ShaderMaterial {
             }
         `,
         transparent: true,
-        side: THREE.FrontSide,
+        side: THREE.DoubleSide,
         depthWrite: false,
     });
     return waterMat;

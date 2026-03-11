@@ -1,7 +1,7 @@
 .lec-container {
     position: absolute;
     right: 10px;
-    top: 150px;
+    top: 180px;
     z-index: 2000;
     font-family: system-ui, sans-serif;
 }
@@ -159,6 +159,57 @@
 }
 .lec-item:not(:hover) .lec-delete-btn {
     opacity: 0.4;
+}
+/* add section */
+.lec-add-section {
+    margin-top: 4px;
+    margin-bottom: 4px;
+}
+.lec-mode-toggle {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 4px;
+}
+.lec-mode-label {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    padding: 4px 0;
+    font-size: 11px;
+    border: 1px solid rgba(0,0,0,0.15);
+    border-radius: 4px;
+    cursor: pointer;
+    color: rgba(0,0,0,0.5);
+    background: transparent;
+}
+.lec-mode-label input[type="radio"] {
+    display: none;
+}
+.lec-mode-label.active {
+    background: rgba(66,133,244,0.1);
+    border-color: #4285f4;
+    color: #4285f4;
+    font-weight: 500;
+}
+.lec-url-input {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.lec-url-field {
+    width: 100%;
+    box-sizing: border-box;
+    height: 26px;
+    padding: 0 6px;
+    border: 1px solid rgba(0,0,0,0.2);
+    border-radius: 4px;
+    font-size: 11px;
+    outline: none;
+}
+.lec-url-field:focus {
+    border-color: #4285f4;
 }
 /* add object button */
 .lec-add-object-btn {

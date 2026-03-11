@@ -1,5 +1,5 @@
 import maplibregl, {MapMouseEvent, OverscaledTileID,} from 'maplibre-gl';
-import {applyShadowLitMaterial, createLightGroup, prepareModelForRender, transformModel} from '../model/objModel.ts';
+import {applyShadowLitMaterial, createLightGroup, parseUrl, prepareModelForRender, transformModel} from '../model/objModel.ts';
 import type {ShadowLitMaterial} from '../shadow/ShadowLitMaterial.ts';
 import {clampZoom, getMetersPerExtentUnit, latlonToLocal} from '../convert/map_convert.ts';
 import {getSharedShadowPass, ShadowMapPass} from "../shadow/ShadowMapPass.ts";
@@ -8,37 +8,39 @@ import type {
     LightGroup,
     LightGroupOption,
     ModelData,
-    ObjectInfo,
     PickHit,
+    ShadowCasterLayer,
     ShadowPair,
-    SunOptions,
     ShadowUserData,
-    SunParamater,
     UserData
 } from '../Interface.ts'
 import * as THREE from 'three';
 import {MaplibreShadowMesh} from "../shadow/ShadowGeometry.ts";
-import {calculateSunDirectionMaplibre} from "../shadow/ShadowHelper.ts";
 import {getSharedRenderer} from "../SharedRenderer.ts";
 
 export type EditorLayerOpts = {
     id: string;
     applyGlobeMatrix: boolean;
     editorLevel: number;
-    sun?: SunOptions;
+
 }
 export type ObjectDefine = {
-    id: string;
+    url: string;
     modeldata: ModelData;
 }
-export type DataTileInfoForEditorLayer = {
-    objects: Array<ObjectInfo>;
-    sceneTile: THREE.Scene;
-    shadowLitMaterials: ShadowLitMaterial[];
-    shadowMaterials : ShadowPair[]; 
+export interface EditorModelData extends ModelData {
+    modelUrl: string;
+    modelName: string;
+    modelExtension: string;
 }
 
-export class EditLayer implements Custom3DTileRenderLayer {
+export type DataTileInfoForEditorLayer = {
+    sceneTile: THREE.Scene;
+    shadowLitMaterials: ShadowLitMaterial[];
+    shadowMaterials : ShadowPair[];
+}
+
+export class EditLayer implements Custom3DTileRenderLayer, ShadowCasterLayer {
     id: string;
     editorLevel: number = 16;
     visible : boolean = true;
@@ -49,38 +51,28 @@ export class EditLayer implements Custom3DTileRenderLayer {
     readonly renderingMode = '3d' as const;
     tileSize: number = 512;
     private clock: THREE.Clock | null = null;
-    private sun: SunParamater | null | undefined;
+
     private map: maplibregl.Map | null = null;
     private renderer: THREE.WebGLRenderer | null = null;
     private camera: THREE.Camera | null = null;
     private raycaster = new THREE.Raycaster();
-    private modelCache: Map<string, ModelData> = new Map<string, ModelData>();
+    private modelCache: Map<string, EditorModelData> = new Map<string, EditorModelData>();
     private tileCache: Map<string, DataTileInfoForEditorLayer> = new Map<string, DataTileInfoForEditorLayer>();
     private applyGlobeMatrix: boolean | false = false;
     private light: LightGroup | null = null;
     private currentScene: THREE.Scene | null = null;    
     private readonly _tmpLightDir = new THREE.Vector3();
     private shadowMapPass: ShadowMapPass | null = null;
-    
+    private _visibleTiles: OverscaledTileID[] = [];
+    useOrchestrator = false;
+
     constructor(opts: EditorLayerOpts & { onPick?: (info: PickHit) => void } & { onPickfail?: () => void }) {
         this.id = opts.id;
         this.editorLevel = opts.editorLevel;
         this.applyGlobeMatrix = opts.applyGlobeMatrix;
         this.onPick = opts.onPick;
         this.onPickfail = opts.onPickfail;
-        if (opts.sun) {
-            this.sun = {
-                altitude: opts.sun.altitude,
-                azimuth: opts.sun.azimuth,
-                sun_dir: calculateSunDirectionMaplibre(THREE.MathUtils.degToRad(opts.sun.altitude),
-                    THREE.MathUtils.degToRad(opts.sun.azimuth)),
-                shadow: opts.sun.shadow
-            }
-        }
-        const dirLight = (this.sun?.sun_dir ?? new THREE.Vector3(0.5, 0.5, 0.5)).clone().normalize();
-        if (this.sun) {
-            this.light = createLightGroup(dirLight);
-        }
+        this.light = createLightGroup(new THREE.Vector3(0.5, 0.5, 0.5).normalize());
     }
 
     setLightOption(option: LightGroupOption) {
@@ -115,16 +107,6 @@ export class EditLayer implements Custom3DTileRenderLayer {
         }
     }
 
-    setSunPos(altitude: number, azimuth: number, shadow: boolean = true): void {
-        this.sun = {
-            altitude: altitude,
-            azimuth: azimuth,
-            sun_dir: calculateSunDirectionMaplibre(THREE.MathUtils.degToRad(altitude),
-                THREE.MathUtils.degToRad(azimuth)),
-            shadow: shadow
-        }
-    }
-
     onAdd(map: maplibregl.Map, gl: WebGLRenderingContext): void {
         this.map = map;
         this.camera = new THREE.Camera();
@@ -135,7 +117,6 @@ export class EditLayer implements Custom3DTileRenderLayer {
             this.shadowMapPass = getSharedShadowPass(8192); 
         }
         this.clock = new THREE.Clock();
-        const layers = map.getStyle().layers;
         map.on('click', this.handleClick);
     }
 
@@ -151,12 +132,18 @@ export class EditLayer implements Custom3DTileRenderLayer {
 
     addObjectsToCache(objects: ObjectDefine[]): void {
         for (const data of objects) {
-            const id = data.id;
-            const modelData = data.modeldata;
-            if (!this.modelCache.has(id)) {
-                const obj3d = modelData.object3d;
+            const {fileName} = parseUrl(data.url);
+            if (!this.modelCache.has(fileName)) {
+                const obj3d = data.modeldata.object3d;
                 prepareModelForRender(obj3d as THREE.Object3D, false);
-                this.modelCache.set(id, modelData);
+                console.log(fileName); 
+                const {extension} = parseUrl(data.url);
+                this.modelCache.set(fileName, {
+                    ...data.modeldata,
+                    modelUrl: data.url,
+                    modelName: fileName,
+                    modelExtension: extension,
+                });
             }
         }
     }
@@ -258,11 +245,8 @@ export class EditLayer implements Custom3DTileRenderLayer {
     private getTileData(key: string): DataTileInfoForEditorLayer {
         let tileData = this.tileCache.get(key);
         if (!tileData) {
-            //create new scene for tile
             const scene = new THREE.Scene();
-            const objects: Array<ObjectInfo> = [];
             tileData = {
-                objects: objects,
                 sceneTile: scene,
                 shadowLitMaterials: [],
                 shadowMaterials : [],
@@ -273,9 +257,45 @@ export class EditLayer implements Custom3DTileRenderLayer {
     }
 
     prerender(): void {
-        if (!this.map || !this.sun || !this.shadowMapPass || !this.renderer) return;
-        const tr = this.map.transform;
-        this.shadowMapPass.calShadowMatrix(tr, this.sun.altitude, this.sun.azimuth);
+        if (!this.map || !this.shadowMapPass || !this.renderer) return;
+        // Populate _visibleTiles early so orchestrator can use them in its prerender
+        const zoom = clampZoom(this.editorLevel, this.editorLevel, Math.round(this.map.getZoom()));
+        this._visibleTiles = this.map.coveringTiles({
+            tileSize: this.tileSize,
+            minzoom: zoom,
+            maxzoom: zoom,
+            roundZoom: true,
+        });
+        if (!this.useOrchestrator) {
+            const tr = this.map.transform;
+            this.shadowMapPass.calShadowMatrix(tr);
+        }
+    }
+
+    renderShadowDepth(renderer: THREE.WebGLRenderer, worldSize: number): void {
+        if (!this.shadowMapPass || !this.map) return;
+        const tilesWithShadow: DataTileInfoForEditorLayer[] = [];
+        for (const tile of this._visibleTiles) {
+            const key = this.tileKey(tile.canonical.x, tile.canonical.y, tile.canonical.z);
+            const tileInfo = this.tileCache.get(key);
+            if (!tileInfo || tileInfo.shadowMaterials.length === 0) continue;
+            tilesWithShadow.push(tileInfo);
+            for (const pair of tileInfo.shadowMaterials) {
+                pair.shadowMesh.visible = false;
+            }
+        }
+        this.shadowMapPass.shadowPassNoClear(
+            renderer,
+            this._visibleTiles,
+            worldSize,
+            (tile) => this.tileKey(tile.canonical.x, tile.canonical.y, tile.canonical.z),
+            (key) => this.tileCache.get(key)?.sceneTile,
+        );
+        for (const tileInfo of tilesWithShadow) {
+            for (const pair of tileInfo.shadowMaterials) {
+                pair.shadowMesh.visible = true;
+            }
+        }
     }
 
     shadowPass(tr: any, visibleTiles: OverscaledTileID[]): void {
@@ -312,6 +332,7 @@ export class EditLayer implements Custom3DTileRenderLayer {
             this.renderer.clearStencil();
         }
         for (const tile of visibleTiles) {
+            
             const tile_key = this.tileKey(tile.canonical.x, tile.canonical.y, tile.canonical.z);
             const projectionData = tr.getProjectionData({
                 overscaledTileID: tile,
@@ -339,15 +360,17 @@ export class EditLayer implements Custom3DTileRenderLayer {
         const zoom = clampZoom(this.editorLevel,
             this.editorLevel,
             Math.round(this.map.getZoom()));
-        const visibleTiles = this.map.coveringTiles({
+        this._visibleTiles = this.map.coveringTiles({
             tileSize: this.tileSize,
             minzoom: zoom,
             maxzoom: zoom,
             roundZoom: true,
         });
         const tr = this.map.transform;
-        this.shadowPass(tr, visibleTiles);
-        this.mainPass(tr, visibleTiles);
+        if (!this.useOrchestrator) {
+            this.shadowPass(tr, this._visibleTiles);
+        }
+        this.mainPass(tr, this._visibleTiles);
     }
 
     addObjectToScene(id: string, lat : number, lon : number, default_scale: number = 1): void {
@@ -379,15 +402,18 @@ export class EditLayer implements Custom3DTileRenderLayer {
             cloneObj3d);
         const main_scene = tileData.sceneTile;
         let mixer: THREE.AnimationMixer | null = null;
-        let actions: THREE.AnimationAction[] | null = null;
         const userData : UserData = {
             tile : {z: this.editorLevel, x: local.tileX, y: local.tileY},
             isModelRoot : true,
             scaleUnit,
-            mixer
+            mixer,
+            id,
+            name: id,
+            modeltype: model_data.modelExtension,
+            modelname: id,
+            modelurl : model_data.modelUrl,
         }
         cloneObj3d.userData = userData;
-        if (!actions) actions = [];
         if (model_data.animations && model_data.animations.length > 0) {
             mixer = new THREE.AnimationMixer(cloneObj3d);
             model_data.animations.forEach((clip) => {
@@ -396,22 +422,10 @@ export class EditLayer implements Custom3DTileRenderLayer {
                     action.reset();
                     action.setLoop(THREE.LoopRepeat, Infinity);
                     action.play();
-                    actions.push(action);
                 }
             });
+            cloneObj3d.userData.mixer = mixer;
         }
-        tileData.objects.push({
-            id: "",
-            name: "",
-            object3d: cloneObj3d,
-            textureUrl: "",
-            textureName: "",
-            modelName: "",
-            modelUrl: "",
-            mixer,
-            actions,
-            animations: model_data.animations ?? [],
-        });
         cloneObj3d.traverse((child: THREE.Object3D) => {
             child.frustumCulled = false;
             if (child instanceof THREE.Mesh) {
@@ -436,11 +450,9 @@ export class EditLayer implements Custom3DTileRenderLayer {
     }
 
     animate(data_tile_info: DataTileInfoForEditorLayer, delta: number): void {
-        //for toan bo object de request animation
-        data_tile_info.objects.forEach((obj) => {
-            const mixer = obj.mixer;
-            if (mixer) {
-                mixer.update(delta);
+        data_tile_info.sceneTile.children.forEach((child) => {
+            if (child.userData?.isModelRoot && child.userData.mixer) {
+                child.userData.mixer.update(delta);
             }
         });
         this.map?.triggerRepaint();
@@ -462,13 +474,57 @@ export class EditLayer implements Custom3DTileRenderLayer {
         this.layerSourceCastShadow = source;
     }
 
+    /** Return tile keys and object list for UI tree view */
+    getTileObjectTree(): Array<{ tileKey: string; objects: Array<{ name: string; id: string }> }> {
+        const result: Array<{ tileKey: string; objects: Array<{ name: string; id: string }> }> = [];
+        for (const [key, tileData] of this.tileCache) {
+            const objs: Array<{ name: string; id: string }> = [];
+            for (const child of tileData.sceneTile.children) {
+                if (!child.userData?.isModelRoot) continue;
+                objs.push({
+                    name: child.userData.name ?? child.name ?? 'unnamed',
+                    id: child.userData.id ?? '',
+                });
+            }
+            if (objs.length > 0) {
+                result.push({ tileKey: key, objects: objs });
+            }
+        }
+        return result;
+    }
+
+    /** Get object3d by tile key and index for tree selection */
+    getObjectByTileKeyAndIndex(tileKey: string, index: number): THREE.Object3D | null {
+        const tileData = this.tileCache.get(tileKey);
+        if (!tileData) return null;
+        const roots = tileData.sceneTile.children.filter(c => c.userData?.isModelRoot);
+        if (index < 0 || index >= roots.length) return null;
+        return roots[index];
+    }
+
+    /** Find the OverscaledTileID for a given tile key from current visible tiles */
+    getOverscaledTileID(tileKey: string): OverscaledTileID | null {
+        for (const tile of this._visibleTiles) {
+            const key = this.tileKey(tile.canonical.x, tile.canonical.y, tile.canonical.z);
+            if (key === tileKey) return tile;
+        }
+        return null;
+    }
+
     private updateShadowLitMaterials(tileInfo: DataTileInfoForEditorLayer, tileKey: string) {
-        if (!this.shadowMapPass || !this.sun?.sun_dir) return;
+        if (!this.shadowMapPass) return;
+        const sd = this.shadowMapPass.sunDir;
         const shadowMap = this.shadowMapPass.getRenderTarget();
         const lightMatrix = this.shadowMapPass.lightMatrices.get(tileKey);
-        this._tmpLightDir.set(-this.sun.sun_dir.x, -this.sun.sun_dir.y, this.sun.sun_dir.z);
+        this._tmpLightDir.set(-sd.x, -sd.y, sd.z);
+        const tod = this.shadowMapPass.timeOfDayColors;
         for (const mat of tileInfo.shadowLitMaterials) {
             mat.update(lightMatrix, shadowMap, this._tmpLightDir);
+            mat.setLightColor(tod.lightColor);
+            mat.setSkyColor(tod.skyColor);
+            mat.setGroundColor(tod.groundColor);
+            mat.setShadowColor(tod.shadowColor);
+            mat.setLighting(tod.ambient, tod.diffuseIntensity);
         }
         for (const pair of tileInfo.shadowMaterials) {
             const shadow_mesh = pair.shadowMesh;
@@ -479,14 +535,12 @@ export class EditLayer implements Custom3DTileRenderLayer {
 
 
     private updateShadow(scene: THREE.Scene) {
-        const sun_dir = this.sun?.sun_dir;
-        if (!sun_dir) {
-            return;
-        }
+        const sd = this.shadowMapPass?.sunDir;
+        if (!sd) return;
         scene.traverse((child) => {
             if (child instanceof MaplibreShadowMesh) {
                 const shadow_scale_z = child.userData.scale_unit;
-                (child as MaplibreShadowMesh).update(sun_dir.x, sun_dir.y, -sun_dir.z / shadow_scale_z);
+                (child as MaplibreShadowMesh).update(sd.x, sd.y, -sd.z / shadow_scale_z);
             }
         });
     }

@@ -80,6 +80,11 @@ export class ShadowRenderTarget {
         link.click();
     }
 
+    resize(size: number): void {
+        if (!this.shadowTarget) return;
+        this.shadowTarget.setSize(size, size);
+    }
+
     dispose(): void {
         this.shadowTarget?.dispose();
         this.shadowTarget = null;

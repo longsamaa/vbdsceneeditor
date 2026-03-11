@@ -39,6 +39,7 @@ export class OverlayLayer implements CustomLayerInterface {
     private currentTile: OverscaledTileID | null = null;
     private hoverDiv: HTMLDivElement | null = null;
     private footprintMeshes: MaplibreShadowMesh[] | null = null;
+    onTransformChange?: (object: THREE.Object3D) => void;
 
     constructor(opts: OverlayLayerOptions) {
         this.id = opts.id;
@@ -174,12 +175,18 @@ export class OverlayLayer implements CustomLayerInterface {
         (this.transformControl as unknown as THREE.Object3D).name = 'TransformControls';
         this.transformControl.setCurrentTile(this.currentTile);
         this.scene.add(this.transformControl as unknown as THREE.Object3D);
+        (this.transformControl as unknown as THREE.Object3D).traverse(obj => { obj.frustumCulled = false; });
         this.transformControl.onHover = (parameter: HoverParameter): void => {
             this.showToolTip(parameter);
         }
         this.transformControl.onNotHover = (): void => {
             this.hideToolTip();
         }
+        this.transformControl.addEventListener('objectChange', () => {
+            if (this.currentObject && this.onTransformChange) {
+                this.onTransformChange(this.currentObject);
+            }
+        });
     }
 
     setMode(mode: TransformControlsMode): void {

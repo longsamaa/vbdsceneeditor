@@ -3,6 +3,7 @@ import type {JsonVectorTileLayer} from "../source/GeojsonConverter.ts";
 
 export function parseLayerTileInfo(layer: JsonVectorTileLayer): Array<ObjectInfo> {
     const lstObject3d: Array<ObjectInfo> = new Array<ObjectInfo>();
+    let bCheck = false; 
     for (let i = 0; i < layer.features.length; i++) {
         const feature = layer.features[i];
         // Chỉ xử lý Point features (type === 'Point')
@@ -15,10 +16,18 @@ export function parseLayerTileInfo(layer: JsonVectorTileLayer): Array<ObjectInfo
         if (!geometry || geometry.length === 0 || geometry[0].length === 0) {
             continue;
         }
+        const modelType = properties.modeltype as string;
+        if(modelType === 'glb'){
+            bCheck = true; 
+        }
+        if (modelType !== 'Object' && modelType !== 'glb') {
+            continue;
+        }
         const pt = geometry[0][0]; // Point đầu tiên
         const object3d: ObjectInfo = {
             localCoordX: pt.x /** (8192 / extent)*/,
             localCoordY: pt.y /** (8192 / extent)*/,
+            gid: properties.gid as string,
             id: properties.id as string,
             bearing: properties.bearing as number,
             modelName: properties.modelname as string,
@@ -27,52 +36,19 @@ export function parseLayerTileInfo(layer: JsonVectorTileLayer): Array<ObjectInfo
             textureName: properties.texturename as string,
             textureUrl: properties.textureurl as string,
             scale: properties.scale as number,
+            startdate: properties.startdate as string,
+            enddate: properties.enddate as string,
             mixer : null,
             animations : null,
             actions : null
         };
-        // Only push if all required properties exist
-        if (object3d.modelName && object3d.modelUrl && object3d.modelType &&
-            object3d.textureName && object3d.textureUrl) {
-            lstObject3d.push(object3d);
-        }
+        lstObject3d.push(object3d);
+    }
+
+    if(bCheck){
+        console.log(lstObject3d); 
     }
 
     return lstObject3d;
 }
 
-/*
-export function parseTileInfo(tile: VectorTile, sourceLayer: string): Array<ObjectInfo> {
-    const layer = tile.layers[sourceLayer];
-    const extent = layer.extent;
-    const lstObject3d: Array<ObjectInfo> = new Array<ObjectInfo>();
-    for (let i = 0; i < layer.length; i++) {
-        const object3d: ObjectInfo = {};
-        const feature = layer.feature(i);
-        const type = feature.type;
-        if (type != 1) {
-            continue;
-        }
-        const properties = feature.properties;
-        const geometries = feature.loadGeometry();
-        const pt = geometries[0][0];
-        object3d.localCoordX = pt.x * (8192 / extent);
-        object3d.localCoordY = pt.y * (8192 / extent);
-        object3d.id = properties.id as string;
-        object3d.bearing = properties.bearing as number;
-        object3d.modelName = properties.modelname as string;
-        object3d.modelUrl = properties.modelurl as string;
-        object3d.modelType = properties.modeltype as string;
-        object3d.textureName = properties.texturename as string;
-        object3d.textureUrl = properties.textureurl as string;
-        object3d.scale = properties.scale as number;
-        object3d.mixer = null;
-        obj
-        // Only push if all required properties exist
-        if (object3d.modelName && object3d.modelUrl && object3d.modelType &&
-            object3d.textureName && object3d.textureUrl) {
-            lstObject3d.push(object3d);
-        }
-    }
-    return lstObject3d;
-}*/

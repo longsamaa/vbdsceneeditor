@@ -17,6 +17,7 @@ export interface LatLon {
     lon: number
 }
 export interface ObjectInfo {
+    gid?: string;
     id?: string;
     name?: string;
     object3d?: THREE.Object3D;
@@ -29,6 +30,8 @@ export interface ObjectInfo {
     textureName?: string;
     modelName?: string;
     modelUrl?: string;
+    startdate?: string;
+    enddate?: string;
     mixer: THREE.AnimationMixer | null;
     actions: THREE.AnimationAction[] | null;
     animations: THREE.AnimationClip[] | null;
@@ -75,6 +78,16 @@ export type UserData = {
         y: number,
     }
     mixer: THREE.AnimationMixer | null,
+    gid?: string | null,
+    id?: string | null,
+    name?: string | null,
+    startdate?: string | null,
+    enddate?: string | null,
+    modeltype?: string | null,
+    modelname?: string | null,
+    modelurl?: string | null,
+    texturename?: string | null,
+    textureurl?: string | null,
 }
 export type ShadowUserData = {
     scale_unit : number
@@ -124,6 +137,21 @@ export type ShadowPair = {
     scaleUnit: number;
     shadowMesh: MaplibreShadowMesh;
 }
+
+export interface ShadowCasterLayer {
+    id: string;
+    visible: boolean;
+    /** Render depth into the shared shadow map (no clear, no render target switch - orchestrator handles that) */
+    renderShadowDepth(renderer: THREE.WebGLRenderer, worldSize: number): void;
+}
+
+export interface ReflectionCasterLayer {
+    id: string;
+    visible: boolean;
+    /** Render scene into the shared reflection render target (orchestrator handles clear/begin/end) */
+    renderReflection(renderer: THREE.WebGLRenderer, reflectionMatrix: THREE.Matrix4, worldSize: number): void;
+}
+
 
 
 

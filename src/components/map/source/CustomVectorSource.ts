@@ -85,6 +85,17 @@ export class CustomVectorSource implements CustomSource {
             }
         });
     }
+    /** Delete a specific tile from cache so it will be re-fetched on next access */
+    deleteTile(tileKey: string): void {
+        this.tileCache.delete(tileKey);
+    }
+
+    /** Clear all tile cache, forcing a full reload */
+    clearCache(): void {
+        this.tileCache.clear();
+        this.map?.triggerRepaint();
+    }
+
     getTile(tile: OverscaledTileID, opts : GetTileOptions): CustomVectorTileData {
         const string_key = this.tileKey(tile);
         let tileData = this.tileCache.get(string_key);

@@ -69,38 +69,37 @@ class OutlineLayer implements CustomLayerInterface {
         this.camera.matrixAutoUpdate = false;
         this.scene = new THREE.Scene();
 
-        // Canvas riêng
+        // Use map canvas dimensions instead of window to stay aligned
+        const mapCanvas = map.getCanvas();
+        const w = mapCanvas.clientWidth;
+        const h = mapCanvas.clientHeight;
+
         this.renderer = new THREE.WebGLRenderer({
             alpha: true,
-            antialias: false, // Tắt để tăng tốc
+            antialias: false,
             powerPreference: "high-performance",
         });
 
-        const pixelRatio = Math.min(window.devicePixelRatio, 1.5);
-        this.renderer.setPixelRatio(pixelRatio);
-        this.renderer.setSize(window.innerWidth, window.innerHeight);
-        // TỐI ƯU CSS ĐỂ GIẢM LAG COMPOSITING
+        this.renderer.setPixelRatio(1);
+        this.renderer.setSize(w, h);
+        this.renderer.setClearColor(0x000000, 0);
+
         const canvas = this.renderer.domElement;
         canvas.style.position = 'absolute';
         canvas.style.top = '0';
         canvas.style.left = '0';
+        canvas.style.width = '100%';
+        canvas.style.height = '100%';
         canvas.style.pointerEvents = 'none';
         canvas.style.zIndex = '1';
-        canvas.style.willChange = 'transform';
-        canvas.style.transform = 'translateZ(0)';
-        canvas.style.backfaceVisibility = 'hidden';
-        canvas.style.perspective = '1000px';
         const mapContainer = map.getContainer();
         mapContainer.appendChild(canvas);
 
-        this.renderer.setClearColor(0x000000, 0);
-        this.renderer.setPixelRatio(1);
         this.composer = new EffectComposer(this.renderer);
         const scale = 0.7;
-        this.composer.setSize(window.innerWidth * scale,
-            window.innerHeight * scale);
+        this.composer.setSize(w * scale, h * scale);
         const outlinePass = new OutlinePass(
-            new THREE.Vector2(window.innerWidth, window.innerHeight),
+            new THREE.Vector2(w, h),
             this.scene,
             this.camera
         );
@@ -115,6 +114,15 @@ class OutlineLayer implements CustomLayerInterface {
         this.renderer = null;
         this.camera = null;
         this.map = null;
+    }
+
+    /** Call when map container resizes to update renderer and composer */
+    resize(width: number, height: number): void {
+        if (!this.renderer || !this.composer || !this.outlinePass) return;
+        this.renderer.setSize(width, height);
+        const scale = 0.7;
+        this.composer.setSize(width * scale, height * scale);
+        this.outlinePass.resolution.set(width, height);
     }
 
     clearComposer(): void {

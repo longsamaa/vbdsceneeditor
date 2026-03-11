@@ -10,10 +10,10 @@ import type {
     ModelData,
     ObjectInfo,
     PickHit,
+    ShadowCasterLayer,
     ShadowParam,
-    SunOptions,
-    SunParamater, 
-    ShadowPair
+    ShadowPair,
+    UserData
 } from '../Interface.ts';
 import {
     clampZoom,
@@ -22,7 +22,6 @@ import {
 } from '../convert/map_convert.ts';
 import {parseLayerTileInfo} from '../tile/tile.ts';
 import {createBuildingGroup, createLightGroup, createShadowGroup, transformModel, applyShadowLitMaterial} from '../model/objModel.ts'
-import {calculateSunDirectionMaplibre} from '../shadow/ShadowHelper.ts'
 import {MaplibreShadowMesh} from "../shadow/ShadowGeometry.ts";
 import {CustomVectorSource} from "../source/CustomVectorSource.ts"
 import {ModelFetch} from "./ModelFetch.ts";
@@ -48,7 +47,6 @@ export type Map4DModelsLayerOptions = {
     maxModelCache?: number;
     /** bật globe matrix khi đang globe */
     applyGlobeMatrix?: boolean;
-    sun?: SunOptions;
 };
 
 type TileState = 'preparing' | 'loaded' | 'not-support' | 'error';
@@ -62,6 +60,7 @@ type TileCacheEntry = DataTileInfo & {
     objects?: ObjectInfo[];
     shadowsObject : ShadowPair[];
     shadowLitMaterials: ShadowLitMaterial[];
+    addedIds: Set<string>;
     isFullObject: boolean;
 };
 
@@ -69,21 +68,20 @@ export type ModelCacheEntry = ModelData & {
     stateDownload: DownloadState;
 };
 
-export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer {
+export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer, ShadowCasterLayer {
     id: string;
     visible = true;
     onPick?: (info: PickHit) => void;
     onPickfail?: () => void;
     layerSourceCastShadow: Custom3DTileRenderLayer | null = null;
     sourceLayer: string;
-    private modelFetcher: ModelFetch = new ModelFetch(8);
+    private modelFetcher!: ModelFetch;
     readonly type = 'custom' as const;
     readonly renderingMode = '3d' as const;
     private light: LightGroup | null = null;
     private map: maplibregl.Map | null = null;
     private renderer: THREE.WebGLRenderer | null = null;
     private camera: THREE.Camera | null = null;
-    private sun: SunParamater | null | undefined;
     private vectorSource: CustomVectorSource | null = null;
     private readonly rootUrl: string;
     private minZoom: number;
@@ -96,7 +94,8 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer {
     private _visibleTiles: OverscaledTileID[] = [];
     private _currentZoom = 0;
     private readonly _tmpLightDir = new THREE.Vector3();
-    //shadow 
+    private readonly clock = new THREE.Clock();
+    //shadow
     private shadowMapPass: ShadowMapPass | null = null;
 
 
@@ -107,25 +106,12 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer {
         this.id = opts.id;
         this.sourceLayer = opts.sourceLayer;
         this.rootUrl = opts.rootUrl;
+        this.modelFetcher = new ModelFetch(8, this.rootUrl);
         this.minZoom = opts.minZoom ?? 16;
         this.maxZoom = opts.maxZoom ?? 19;
         this.tileSize = opts.tileSize ?? 512;
         this.applyGlobeMatrix = opts.applyGlobeMatrix ?? true;
-        if (opts.sun) {
-            this.sun = {
-                altitude: opts.sun.altitude,
-                azimuth: opts.sun.azimuth,
-                sun_dir: calculateSunDirectionMaplibre(THREE.MathUtils.degToRad(opts.sun.altitude),
-                    THREE.MathUtils.degToRad(opts.sun.azimuth)),
-                shadow: opts.sun.shadow,
-                lat: opts.sun.lat,
-                lon: opts.sun.lon,
-            }
-        }
-        const dirLight = (this.sun?.sun_dir ?? new THREE.Vector3(0.5, 0.5, 0.5)).clone().normalize();
-        if (this.sun) {
-            this.light = createLightGroup(dirLight);
-        }
+        this.light = createLightGroup(new THREE.Vector3(0.5, 0.5, 0.5).normalize());
         this.modelCache = new LRUCache<string, ModelCacheEntry>({
             max: opts.maxModelCache ?? 1024,
             dispose: (model) => {
@@ -150,22 +136,6 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer {
     setVisible(v: boolean): void {
         this.visible = v;
         this.map?.triggerRepaint?.();
-    }
-
-    setSunPos(altitude: number, azimuth: number, shadow: boolean = true): void {
-        this.sun = {
-            altitude: altitude,
-            azimuth: azimuth,
-            sun_dir: calculateSunDirectionMaplibre(THREE.MathUtils.degToRad(altitude),
-                THREE.MathUtils.degToRad(azimuth)),
-            shadow: shadow
-        }
-    }
-
-    private calShadowMatrix(_args: CustomRenderMethodInput){
-        if(!this.map || !this.sun || !this.shadowMapPass) return;
-        const tr = this.map.transform;
-        this.shadowMapPass.calShadowMatrix(tr, this.sun.altitude, this.sun.azimuth);
     }
 
     prerender(gl, args: CustomRenderMethodInput): void {
@@ -201,6 +171,7 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer {
                         isFullObject: false,
                         shadowsObject : [],
                         shadowLitMaterials: [],
+                        addedIds: new Set<string>(),
                     }
                     createBuildingGroup(scene);
                     createShadowGroup(scene);
@@ -224,23 +195,19 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer {
                                     if (modelName) {
                                         this.modelCache.set(modelName, modelCacheEntry);
                                     }
-                                    const modelType = object.modelType;
-                                    if (modelType === "Object") {
-                                        let modelUrl = object.modelUrl ?? '';
-                                        let textureUrl = object.textureUrl ?? '';
-                                        if (this.rootUrl) {
-                                            modelUrl = this.rootUrl + modelUrl;
-                                            textureUrl = this.rootUrl + textureUrl;
-                                        }
-                                        this.modelFetcher.fetch(modelUrl, textureUrl, modelCacheEntry, (error, obj3d) => {
-                                            if (error) {
-                                                console.warn(error);
-                                            }
-                                            if (obj3d) {
-                                            }
-                                            this.map?.triggerRepaint();
-                                        });
+                                    const modelType = object.modelType ?? 'Object';
+                                    const modelUrl = object.modelUrl ?? '';
+                                    const textureUrl = object.textureUrl ?? '';
+                                    if(modelType === 'glb')
+                                    {
+                                        console.log(objects); 
                                     }
+                                    this.modelFetcher.fetch(modelUrl, textureUrl, modelType, modelCacheEntry, (error) => {
+                                        if (error) {
+                                            console.warn(error);
+                                        }
+                                        this.map?.triggerRepaint();
+                                    });
                                 }
                             }
                         }
@@ -249,7 +216,10 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer {
                 }
             }
         }
-        this.calShadowMatrix(args);
+    }
+
+    getVectorSource(): CustomVectorSource | null {
+        return this.vectorSource;
     }
 
     setVectorSource(source: CustomVectorSource): void {
@@ -315,6 +285,34 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer {
         this.modelCache.clear();
     }
 
+    useOrchestrator = false;
+
+    renderShadowDepth(renderer: THREE.WebGLRenderer, worldSize: number): void {
+        if (!this.shadowMapPass || !this.renderer) return;
+        const tilesWithShadow: TileCacheEntry[] = [];
+        for (const tile of this._visibleTiles) {
+            const key = this.tileKey(tile);
+            const tileInfo = this.tileCache.get(key);
+            if (!tileInfo || tileInfo.shadowsObject.length === 0) continue;
+            tilesWithShadow.push(tileInfo);
+            for (const pair of tileInfo.shadowsObject) {
+                pair.shadowMesh.visible = false;
+            }
+        }
+        this.shadowMapPass.shadowPassNoClear(
+            renderer,
+            this._visibleTiles,
+            worldSize,
+            (tile) => this.tileKey(tile),
+            (key) => this.tileCache.get(key)?.sceneTile,
+        );
+        for (const tileInfo of tilesWithShadow) {
+            for (const pair of tileInfo.shadowsObject) {
+                pair.shadowMesh.visible = true;
+            }
+        }
+    }
+
     shadowPass(tr : any, visibleTiles : OverscaledTileID[]) : void {
         if(!this.shadowMapPass || !this.renderer) return;
         const tilesWithShadow: TileCacheEntry[] = [];
@@ -343,12 +341,13 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer {
     }
 
     mainPass(tr : any, visibleTiles : OverscaledTileID[]) : void {
-        if(!this.renderer || !this.sun || !this.camera || !this.shadowMapPass) return;
+        if(!this.renderer || !this.camera || !this.shadowMapPass) return;
         this.renderer.resetState();
         if(!this.layerSourceCastShadow){
             this.renderer.clearStencil();
         }
-        this._tmpLightDir.set(-this.sun!.sun_dir.x, -this.sun!.sun_dir.y, this.sun!.sun_dir.z);
+        const sd = this.shadowMapPass.sunDir;
+        this._tmpLightDir.set(-sd.x, -sd.y, sd.z);
         for (const tile of visibleTiles) {
             const tile_key = this.tileKey(tile);
             const tileInfo = this.tileCache.get(tile_key);
@@ -372,8 +371,26 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer {
         }
         if (this.map.getZoom() < this.minZoom) return;
         const tr = this.map.transform;
-        this.shadowPass(tr, this._visibleTiles);
+        const delta = this.clock.getDelta();
+        this.animateMixers(delta);
+        if (!this.useOrchestrator) {
+            this.shadowPass(tr, this._visibleTiles);
+        }
         this.mainPass(tr, this._visibleTiles);
+    }
+
+    private animateMixers(delta: number): void {
+        for (const tile of this._visibleTiles) {
+            const key = this.tileKey(tile);
+            const tileInfo = this.tileCache.get(key);
+            if (!tileInfo?.sceneTile) continue;
+            tileInfo.sceneTile.traverse((child) => {
+                if (child.userData?.isModelRoot && child.userData.mixer) {
+                    child.userData.mixer.update(delta);
+                }
+            });
+        }
+        this.map?.triggerRepaint();
     }
 
     /** --------- Picking --------- */
@@ -383,6 +400,7 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer {
         }
         //this.shadowRenderPass?.exportTexture(this.renderer,'D:\\');
         // to NDC [-1..1]
+        console.log('threed click'); 
         const canvas = this.map.getCanvas();
         const rect = canvas.getBoundingClientRect();
         const ndc = new THREE.Vector2(
@@ -510,18 +528,47 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer {
         lightDir: THREE.Vector3,
     ): void {
         const shadowMap = this.shadowMapPass?.getRenderTarget();
+        const tod = this.shadowMapPass?.timeOfDayColors;
         for (const mat of tile.shadowLitMaterials) {
             mat.update(lightMatrix, shadowMap, lightDir);
+            if (tod) {
+                mat.setLightColor(tod.lightColor);
+                mat.setSkyColor(tod.skyColor);
+                mat.setGroundColor(tod.groundColor);
+                mat.setShadowColor(tod.shadowColor);
+                mat.setLighting(tod.ambient, tod.diffuseIntensity);
+            }
         }
-        const sun_dir = this.sun?.sun_dir;
-        if (!sun_dir) {
-            return;
-        }
+        const sd = this.shadowMapPass?.sunDir;
+        if (!sd) return;
         for (const shadow_pair of tile.shadowsObject) {
-            const scale_unit = shadow_pair.scaleUnit; 
-            const mat = shadow_pair.shadowMesh;  
-            mat.update(-sun_dir.x, -sun_dir.y, sun_dir.z / scale_unit)
+            const scale_unit = shadow_pair.scaleUnit;
+            const mat = shadow_pair.shadowMesh;
+            mat.update(-sd.x, -sd.y, sd.z / scale_unit)
         }
+    }
+
+    private shallowCloneModel(source: THREE.Object3D): THREE.Object3D {
+        const clone = source.clone(false);
+        for (const child of source.children) {
+            if (child instanceof THREE.Mesh) {
+                const meshClone = new THREE.Mesh(child.geometry, child.material.clone());
+                meshClone.name = child.name;
+                meshClone.matrix.copy(child.matrix);
+                meshClone.matrixWorld.copy(child.matrixWorld);
+                meshClone.matrixAutoUpdate = false;
+                if (child.morphTargetInfluences) {
+                    meshClone.morphTargetInfluences = child.morphTargetInfluences.slice();
+                }
+                if (child.morphTargetDictionary) {
+                    meshClone.morphTargetDictionary = {...child.morphTargetDictionary};
+                }
+                clone.add(meshClone);
+            } else {
+                clone.add(this.shallowCloneModel(child));
+            }
+        }
+        return clone;
     }
 
     private populateBuildingGroup(overScaledTile: OverscaledTileID, tile: TileCacheEntry) {
@@ -531,6 +578,7 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer {
         // chỉ add khi chưa đủ
         const building_group = tile.sceneTile.getObjectByName('building_group');
         if (!building_group) return;
+        
         if (building_group.children.length === tile.objects.length) {
             tile.isFullObject = true;
             return;
@@ -543,19 +591,21 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer {
         for (const object of tile.objects) {
             const modelName = object.modelName as string;
             const modelId = object.id as string;
-            if (!modelName || !modelId) {
+            const gid = object.gid as string;
+            const objectId = modelId || gid;
+            if (!modelName || !objectId) {
                 continue;
             }
             const cached = this.modelCache.get(modelName);
             if (!cached || cached.stateDownload !== 'loaded' || !cached.object3d) {
                 continue;
             }
-            if (tile.sceneTile.getObjectByName(modelId)) {
+            if (tile.addedIds.has(objectId)) {
                 continue;
             }
             // scale theo vĩ độ/zoom như code của bạn
-            const cloneObj3d = cached.object3d.clone(true);
-            cloneObj3d.name = modelId;
+            const cloneObj3d = this.shallowCloneModel(cached.object3d);
+            cloneObj3d.name = objectId;
             const lat_lon: LatLon = tileLocalToLatLon(
                 z,
                 tileX,
@@ -576,14 +626,39 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer {
             cloneObj3d.matrixAutoUpdate = false;
             cloneObj3d.updateMatrix();
             cloneObj3d.updateMatrixWorld(true);
-            cloneObj3d.userData = {
-                modelId,
-                modelName,
-                objectInfo: object,
-                tile: {z, x: tileX, y: tileY},
-                scaleUnit,
+            const rawModelUrl = object.modelUrl ?? '';
+            const rawTextureUrl = object.textureUrl ?? '';
+            const modelUrl = rawModelUrl && this.rootUrl && !/^https?:\/\//.test(rawModelUrl) ? this.rootUrl + rawModelUrl : rawModelUrl;
+            const textureUrl = rawTextureUrl && this.rootUrl && !/^https?:\/\//.test(rawTextureUrl) ? this.rootUrl + rawTextureUrl : rawTextureUrl;
+            const ud: UserData = {
                 isModelRoot: true,
+                scaleUnit,
+                tile: {z, x: tileX, y: tileY},
+                mixer: null,
+                gid: object.gid ?? null,
+                id: objectId,
+                name: modelName,
+                modeltype: object.modelType ?? 'Object',
+                modelname: modelName,
+                modelurl: modelUrl,
+                texturename: object.textureName ?? '',
+                textureurl: textureUrl,
+                startdate: object.startdate ?? null,
+                enddate: object.enddate ?? null,
             };
+            cloneObj3d.userData = ud;
+            if (cached.animations && cached.animations.length > 0) {
+                const mixer = new THREE.AnimationMixer(cloneObj3d);
+                cached.animations.forEach((clip) => {
+                    const action = mixer.clipAction(clip);
+                    if (action) {
+                        action.reset();
+                        action.setLoop(THREE.LoopRepeat, Infinity);
+                        action.play();
+                    }
+                });
+                cloneObj3d.userData.mixer = mixer;
+            }
             cloneObj3d.traverse((child) => {
                 if (child instanceof THREE.Mesh) {
                     const shadowLitMat = applyShadowLitMaterial(child);
@@ -602,7 +677,8 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer {
             });
             cloneObj3d.traverse(obj => { obj.frustumCulled = false; });
             building_group.add(cloneObj3d);
-            this.map?.triggerRepaint();
+            tile.addedIds.add(objectId);
         }
+        this.map?.triggerRepaint();
     }
 }

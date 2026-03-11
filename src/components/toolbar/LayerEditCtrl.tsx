@@ -1,11 +1,12 @@
 import {useEffect, useRef, useState} from 'react';
 import './LayerEditCtrl.css';
-import {Layers, X, Eye, EyeOff, Trash2, Plus} from 'lucide-react';
+import {Layers, X, Eye, EyeOff, Trash2, Plus, Link, HardDrive} from 'lucide-react';
 
 export interface EditableLayer {
     id: string;
     name: string;
     isVisible: boolean;
+    canAddObject?: boolean;
 }
 
 interface Props {
@@ -16,6 +17,7 @@ interface Props {
     onDeleteLayer : (id : string) => void;
     onAdd: () => void;
     onAddObject?: (layerId: string, file: File) => void;
+    onAddObjectFromUrl?: (layerId: string, url: string) => void;
 }
 
 export const LayerEditControl = ({
@@ -25,10 +27,13 @@ export const LayerEditControl = ({
                                      onVisibleLayer,
                                      onDeleteLayer,
                                      onAddObject,
+                                     onAddObjectFromUrl,
                                  }: Props) => {
     const [open, setOpen] = useState(false);
     const [activeLayerId, setActiveLayerId] = useState<string | null>(null);
     const [visibleMap, setVisibleMap] = useState<Record<string, boolean>>({});
+    const [addMode, setAddMode] = useState<'local' | 'url'>('local');
+    const [urlInput, setUrlInput] = useState('http://10.222.3.84:9000/indoornavigation/Crane3d.glb');
     const fileInputRef = useRef<HTMLInputElement>(null);
     useEffect(() => {
         const next: Record<string, boolean> = {};
@@ -114,28 +119,69 @@ export const LayerEditControl = ({
                             </div>
                         ))}
                     </div>
-                    {activeLayerId && (
-                        <>
-                            <input
-                                ref={fileInputRef}
-                                type="file"
-                                accept=".glb,.gltf"
-                                style={{display: 'none'}}
-                                onChange={(e) => {
-                                    const file = e.target.files?.[0];
-                                    if (file && activeLayerId && onAddObject) {
-                                        onAddObject(activeLayerId, file);
-                                    }
-                                    e.target.value = '';
-                                }}
-                            />
-                            <button
-                                className="lec-add-object-btn"
-                                onClick={() => fileInputRef.current?.click()}
-                            >
-                                <Plus size={14} strokeWidth={2}/> Add object (.glb)
-                            </button>
-                        </>
+                    {activeLayerId && layers.find(l => l.id === activeLayerId)?.canAddObject && (
+                        <div className="lec-add-section">
+                            <div className="lec-mode-toggle">
+                                <label className={`lec-mode-label ${addMode === 'local' ? 'active' : ''}`}>
+                                    <input type="radio" name="addMode" checked={addMode === 'local'} onChange={() => setAddMode('local')} />
+                                    <HardDrive size={12}/> Local
+                                </label>
+                                <label className={`lec-mode-label ${addMode === 'url' ? 'active' : ''}`}>
+                                    <input type="radio" name="addMode" checked={addMode === 'url'} onChange={() => setAddMode('url')} />
+                                    <Link size={12}/> URL
+                                </label>
+                            </div>
+                            {addMode === 'local' ? (
+                                <>
+                                    <input
+                                        ref={fileInputRef}
+                                        type="file"
+                                        accept=".glb,.gltf"
+                                        style={{display: 'none'}}
+                                        onChange={(e) => {
+                                            const file = e.target.files?.[0];
+                                            if (file && activeLayerId && onAddObject) {
+                                                onAddObject(activeLayerId, file);
+                                            }
+                                            e.target.value = '';
+                                        }}
+                                    />
+                                    <button
+                                        className="lec-add-object-btn"
+                                        onClick={() => fileInputRef.current?.click()}
+                                    >
+                                        <Plus size={14} strokeWidth={2}/> Add from file
+                                    </button>
+                                </>
+                            ) : (
+                                <div className="lec-url-input">
+                                    <input
+                                        type="text"
+                                        className="lec-url-field"
+                                        placeholder="https://...model.glb"
+                                        value={urlInput}
+                                        onChange={(e) => setUrlInput(e.target.value)}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter' && urlInput.trim() && activeLayerId) {
+                                                onAddObjectFromUrl?.(activeLayerId, urlInput.trim());
+                                                setUrlInput('');
+                                            }
+                                        }}
+                                    />
+                                    <button
+                                        className="lec-add-object-btn"
+                                        onClick={() => {
+                                            if (urlInput.trim() && activeLayerId) {
+                                                onAddObjectFromUrl?.(activeLayerId, urlInput.trim());
+                                                setUrlInput('');
+                                            }
+                                        }}
+                                    >
+                                        <Plus size={14} strokeWidth={2}/> Add from URL
+                                    </button>
+                                </div>
+                            )}
+                        </div>
                     )}
                     <button
                         className="lec-add-btn"

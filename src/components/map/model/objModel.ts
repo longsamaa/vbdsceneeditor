@@ -58,17 +58,13 @@ export function downloadTexture(url: string): Promise<THREE.Texture> {
     });
 }
 
-export function downloadModel(url: string): Promise<THREE.Group> {
-    return new Promise((resolve, reject) => {
-            const loader = new OBJLoader();
-            loader.loadAsync(url).then((object) => {
-                // const zUpObject = convertRawObject3DToZUp(object);
-                resolve(object);
-            }).catch((err) => {
-                reject(err);
-            });
-        }
-    );
+export async function downloadModel(url: string): Promise<ModelData> {
+    if (url.endsWith('.glb') || url.endsWith('.gltf')) {
+        return await loadModelFromGlb(url);
+    }
+    const loader = new OBJLoader();
+    const object = await loader.loadAsync(url);
+    return { object3d: object, animations: null };
 }
 
 export function reverseFaceWinding(geometry: THREE.BufferGeometry): void {
@@ -200,25 +196,20 @@ export function decomposeObject(model: THREE.Object3D) {
     const localPos = model.position;
     const tile = userData.tile;
     const latlon = tileLocalToLatLon(tile.z, tile.x, tile.y, localPos.x, localPos.y);
-    const scaleX = model.scale.x / scaleUnit;
-    //Them dau - do phai lat Y
-    const scaleY = -model.scale.y / scaleUnit;
-    const scaleZ = model.scale.z;
-    //rotate bearing
-    const rad_bearing = model.rotation.z * -1;
-    const bearing = THREE.MathUtils.radToDeg(rad_bearing);
+    // transformModel: scale.set(scaleUnit * objectScale, -objectScale, scaleUnit * objectScale)
+    const scale = model.scale.x / scaleUnit;
+    // transformModel: rotation.y = degToRad(bearing)
+    const bearing = THREE.MathUtils.radToDeg(model.rotation.y);
     const box = new THREE.Box3();
     box.setFromObject(model);
-    const min = box.min;
-    const max = box.max;
-    const height = max.z - min.z;
+    const height = box.max.z - box.min.z;
     return {
         latlon,
         tileCoord: localPos,
         elevation: model.position.z,
-        scale: {scaleX, scaleY, scaleZ},
-        bearing: bearing,
-        height: height,
+        scale,
+        bearing,
+        height,
     };
 }
 
@@ -349,16 +340,20 @@ export function applyShadowLitMaterial(mesh: THREE.Mesh): ShadowLitMaterial {
         shadowMat.uniforms.hasAlphaMap.value = 1;
     }
 
-    // alpha test
+    // alpha test — detect RGBA textures that need alpha cutoff
+    const hasAlpha = origMat.alphaTest > 0 || origMat.transparent || origMat.alphaMap != null
+        || (origMat.map?.format === THREE.RGBAFormat);
     if (origMat.alphaTest > 0) {
         shadowMat.uniforms.alphaTest.value = origMat.alphaTest;
+    } else if (hasAlpha) {
+        shadowMat.uniforms.alphaTest.value = 0.5;
     }
 
     // opacity
     if (origMat.opacity < 1.0) {
         shadowMat.setOpacity(origMat.opacity);
     }
-    if (origMat.transparent) {
+    if (hasAlpha) {
         shadowMat.transparent = true;
     }
 
@@ -384,5 +379,15 @@ export function isGlbModel(modelUrl: string): boolean {
         return modelUrl.toLowerCase().split('?')[0].endsWith('.glb');
     }
 }
+
+export function parseUrl(url: string): { fileName: string; extension: string } {
+    const clean = url.split('?')[0].split('#')[0];
+    const lastSlash = clean.lastIndexOf('/');
+    const fullName = lastSlash >= 0 ? clean.substring(lastSlash + 1) : clean;
+    const dotIdx = fullName.lastIndexOf('.');
+    if (dotIdx <= 0) return { fileName: fullName, extension: '' };
+    return { fileName: fullName, extension: fullName.substring(dotIdx + 1).toLowerCase() };
+}
+
 
 
