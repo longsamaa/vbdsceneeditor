@@ -18,6 +18,7 @@ import {WaterLayer} from "./water/WaterLayer.ts"
 import {CustomVectorSource} from "./source/CustomVectorSource.ts"
 import {InstanceLayer} from "./instance/InstanceLayer.ts"
 import {ShadowOrchestrator} from "./shadow/ShadowOrchestrator.ts"
+import {ReflectionOrchestrator} from "./water/ReflectionOrchestrator.ts"
 import {deleteModelFromDb, saveModelToDb} from "./api/modelApi.ts"
 import {getSharedShadowPass} from "./shadow/ShadowMapPass.ts"
 import {getSunPosition} from "./shadow/ShadowHelper.ts"
@@ -244,15 +245,6 @@ function createDefaultMap(map: maplibregl.Map, overlay_layer: OverlayLayer, outl
         maxTileCache: 1024,
         map,
     });
-    const waterLayer = new WaterLayer({
-        id: 'test_water_layer',
-        applyGlobeMatrix: false,
-        sourceLayer: 'region_river_index',
-        normalUrl: '/normal/4141-normal.jpg',
-        sun: sun_options,
-    });
-    waterLayer.setVectorSource(customSource);
-    map.addLayer(waterLayer);
     // Instance layer
     const instanceCustomSource = new CustomVectorSource({
         id: 'test-custom-source',
@@ -317,6 +309,24 @@ function createDefaultMap(map: maplibregl.Map, overlay_layer: OverlayLayer, outl
     layerManager.addNewLayer(map4d_layer.id, map4d_layer);
     layerManager.addNewLayer(instance_layer.id, instance_layer);
     layerManager.addNewLayer(edit_layer.id, edit_layer);
+
+
+    //reflection orchestrator render add vao cuoi cung 
+
+    ReflectionOrchestrator
+    const reflectionOrchestrator = new ReflectionOrchestrator('reflection-orchestrator');
+    map.addLayer(reflectionOrchestrator); 
+    reflectionOrchestrator.register(map4d_layer); 
+
+    const waterLayer = new WaterLayer({
+        id: 'test_water_layer',
+        applyGlobeMatrix: false,
+        sourceLayer: 'region_river_index',
+        normalUrl: '/normal/4141-normal.jpg',
+        sun: sun_options,
+    });
+    waterLayer.setVectorSource(customSource);
+    map.addLayer(waterLayer);
 }
 
 function addControlMaplibre(map: maplibregl.Map): void {

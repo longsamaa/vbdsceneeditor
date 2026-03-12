@@ -3,7 +3,6 @@ import type {JsonVectorTileLayer} from "../source/GeojsonConverter.ts";
 
 export function parseLayerTileInfo(layer: JsonVectorTileLayer): Array<ObjectInfo> {
     const lstObject3d: Array<ObjectInfo> = new Array<ObjectInfo>();
-    let bCheck = false; 
     for (let i = 0; i < layer.features.length; i++) {
         const feature = layer.features[i];
         // Chỉ xử lý Point features (type === 'Point')
@@ -17,9 +16,6 @@ export function parseLayerTileInfo(layer: JsonVectorTileLayer): Array<ObjectInfo
             continue;
         }
         const modelType = properties.modeltype as string;
-        if(modelType === 'glb'){
-            bCheck = true; 
-        }
         if (modelType !== 'Object' && modelType !== 'glb') {
             continue;
         }
@@ -44,11 +40,6 @@ export function parseLayerTileInfo(layer: JsonVectorTileLayer): Array<ObjectInfo
         };
         lstObject3d.push(object3d);
     }
-
-    if(bCheck){
-        console.log(lstObject3d); 
-    }
-
     return lstObject3d;
 }
 

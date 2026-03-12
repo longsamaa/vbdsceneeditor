@@ -127,7 +127,13 @@ export class ShadowMapPass {
             }
             this.depthMat.uniforms.lightMatrix.value = lightMatrix;
             scene.overrideMaterial = this.depthMat;
+            scene.traverse(obj => {
+                if (obj instanceof THREE.Mesh) obj.frustumCulled = false;
+            });
             renderer.render(scene, this.camera);
+            scene.traverse(obj => {
+                if (obj instanceof THREE.Mesh) obj.frustumCulled = true;
+            });
             scene.overrideMaterial = null;
         }
         this.renderTarget.endRenderShadowPass(renderer);
@@ -161,7 +167,13 @@ export class ShadowMapPass {
             }
             this.depthMat.uniforms.lightMatrix.value = lightMatrix;
             scene.overrideMaterial = this.depthMat;
+            scene.traverse(obj => {
+                if (obj instanceof THREE.Mesh) obj.frustumCulled = false;
+            });
             renderer.render(scene, this.camera);
+            scene.traverse(obj => {
+                if (obj instanceof THREE.Mesh) obj.frustumCulled = true;
+            });
             scene.overrideMaterial = null;
         }
         this.renderTarget.endRenderShadowPass(renderer);

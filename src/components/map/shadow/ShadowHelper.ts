@@ -41,7 +41,6 @@ export function getSunPosition(lat: number, lon: number) {
     // Ban đêm (mặt trời dưới đường chân trời) → dùng vị trí mặt trăng
     if (sunPos.altitude < 0) {
         const moonPos = SunCalc.getMoonPosition(now, lat, lon);
-        console.log(moonPos); 
         return {
             altitude: moonPos.altitude * (180 / Math.PI),
             azimuth: moonPos.azimuth * (180 / Math.PI) + 180,

@@ -1,8 +1,10 @@
 import * as THREE from 'three';
+import maplibregl, {MapMouseEvent,} from 'maplibre-gl';
 import type {CustomLayerInterface, Map} from 'maplibre-gl';
 import type {ReflectionCasterLayer} from '../Interface';
 import {WaterRenderTarget} from './WaterRenderTarget';
 import {getSharedRenderer} from '../SharedRenderer';
+import { getSharedReflectionPass, ReflectionPass } from './ReflectionPass';
 
 /**
  * ReflectionOrchestrator is a maplibre custom layer that renders
@@ -21,7 +23,14 @@ export class ReflectionOrchestrator implements CustomLayerInterface {
     private renderer: THREE.WebGLRenderer | null = null;
     private readonly renderTarget: WaterRenderTarget;
     private readonly casters: ReflectionCasterLayer[] = [];
-    private readonly reflectionMatrix = new THREE.Matrix4();
+    private reflectionPass : ReflectionPass | null = null; 
+    private reflectionMatrix = new THREE.Matrix4().set(
+        1, 0,  0, 0,
+        0, 1,  0, 0,
+        0, 0, -1, 0,
+        0, 0,  0, 1
+    );
+    private isClick : boolean = false; 
     /** Water plane height in world units (Z = 0 by default) */
     private waterPlaneZ: number = 0;
 
@@ -33,7 +42,14 @@ export class ReflectionOrchestrator implements CustomLayerInterface {
     onAdd(map: Map, gl: WebGLRenderingContext): void {
         this.map = map;
         this.renderer = getSharedRenderer(map.getCanvas(), gl);
+        const canvas = this.map.getCanvas(); 
+        this.reflectionPass = getSharedReflectionPass(canvas.width * 0.5,canvas.height * 0.5); 
+        map.on('click', this.handleClick);
     }
+
+    private handleClick = (e: MapMouseEvent) => {
+        this.isClick = true; 
+    };
 
     onRemove(): void {
         this.map = null;
@@ -86,30 +102,21 @@ export class ReflectionOrchestrator implements CustomLayerInterface {
     }
 
     render(): void {
-        if (!this.map || !this.renderer || this.casters.length === 0) return;
-
+        if (!this.map || !this.renderer || this.casters.length === 0 || !this.reflectionPass) return;
         const tr = (this.map as any).transform;
 
-        // 1. Calculate reflection matrix
-        this.calcReflectionMatrix();
-
-        // 2. Clear reflection target
-        this.renderTarget.clearReflectionTarget(this.renderer);
-
-        // 3. Begin reflection pass
-        this.renderTarget.beginReflectionPass(this.renderer);
-
-        // 4. Render reflected scene from all registered casters
+        this.reflectionPass.clearReflection(this.renderer); 
+        // // 4. Render reflected scene from all registered casters
         for (const caster of this.casters) {
-            if (!caster.visible) continue;
+             if (!caster.visible) continue;
             caster.renderReflection(this.renderer, this.reflectionMatrix, tr.worldSize);
         }
-
-        // 5. End reflection pass
-        this.renderTarget.endReflectionPass(this.renderer);
-
-        // 6. Reset WebGL state
+        // // 6. Reset WebGL state
         this.renderer.resetState();
+        // if(this.isClick){
+        //     this.renderTarget.exportTexture(this.renderer,'d'); 
+        //     this.isClick = false; 
+        // }
     }
 
     resizeReflectionMap(size: number): void {

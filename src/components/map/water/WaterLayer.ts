@@ -7,10 +7,11 @@ import * as THREE from 'three';
 import {CustomVectorSource} from "../source/CustomVectorSource.ts"
 import {buildGeo, triangulatePolygonWithHoles} from "../source/GeojsonConverter.ts";
 import type {Feature, GeoJsonProperties, MultiPolygon, Polygon, Position} from 'geojson';
-import {createWaterMaterial} from "./WaterMaterial.ts";
+import {createWaterMaterial,WaterReflectionMaterial} from "./WaterMaterial.ts";
 import * as turf from "@turf/turf";
 import {calculateSunDirectionMaplibre} from "../shadow/ShadowHelper.ts";
 import {getSharedRenderer} from "../SharedRenderer.ts";
+import { getSharedReflectionPass, ReflectionPass } from '../water/ReflectionPass.ts';
 
 export type WaterLayerOpts = {
     id: string;
@@ -32,7 +33,8 @@ export class WaterLayer implements Custom3DTileRenderLayer {
     readonly type = 'custom' as const;
     readonly renderingMode = '3d' as const;
     tileSize: number = 512;
-    waterMaterial: THREE.ShaderMaterial | null = null;
+    //waterMaterial: THREE.ShaderMaterial | null = null;
+    waterMaterial : WaterReflectionMaterial | null = null; 
     private vectorSource: CustomVectorSource | null = null;
     private mainScene: THREE.Scene | null = null;
     private sun: SunParamater | null | undefined;
@@ -50,6 +52,7 @@ export class WaterLayer implements Custom3DTileRenderLayer {
     private _projMatrix = new THREE.Matrix4();
     private _visibleTiles: any[] = [];
     private _zoom: number = 0;
+    private reflectionPass : ReflectionPass | null = null; 
 
     constructor(opts: WaterLayerOpts & { onPick?: (info: PickHit) => void } & { onPickfail?: () => void }) {
         this.id = opts.id;
@@ -63,23 +66,24 @@ export class WaterLayer implements Custom3DTileRenderLayer {
                 t.wrapS = t.wrapT = THREE.RepeatWrapping;
             }
         );
-        this.waterMaterial = createWaterMaterial({
-            color: 0x2a7fff,
-            opacity: 0.8,
-            tex: this.waterNormalTexture,
-        });
-        if (opts.sun) {
-            this.sun = {
-                altitude: opts.sun.altitude,
-                azimuth: opts.sun.azimuth,
-                sun_dir: calculateSunDirectionMaplibre(THREE.MathUtils.degToRad(opts.sun.altitude),
-                    THREE.MathUtils.degToRad(opts.sun.azimuth)),
-                shadow: opts.sun.shadow
-            }
-        }
-        if (this.sun) {
-            this.waterMaterial.uniforms.lightDir.value = this.sun.sun_dir.clone().normalize();
-        }
+        this.waterMaterial = new WaterReflectionMaterial(); 
+        // this.waterMaterial = createWaterMaterial({
+        //     color: 0x2a7fff,
+        //     opacity: 0.8,
+        //     tex: this.waterNormalTexture,
+        // });
+        // if (opts.sun) {
+        //     this.sun = {
+        //         altitude: opts.sun.altitude,
+        //         azimuth: opts.sun.azimuth,
+        //         sun_dir: calculateSunDirectionMaplibre(THREE.MathUtils.degToRad(opts.sun.altitude),
+        //             THREE.MathUtils.degToRad(opts.sun.azimuth)),
+        //         shadow: opts.sun.shadow
+        //     }
+        // }
+        // if (this.sun) {
+        //     this.waterMaterial.uniforms.lightDir.value = this.sun.sun_dir.clone().normalize();
+        // }
         this.minZoom = opts.minZoom ?? 0;
         this.maxZoom = opts.maxZoom ?? 20;
     }
@@ -95,6 +99,10 @@ export class WaterLayer implements Custom3DTileRenderLayer {
         })
         map.on('click', this.handleClick);
         this.isRebuildWaterGeometry = true;
+        const canvas = this.map.getCanvas(); 
+        if(!this.reflectionPass){
+            this.reflectionPass = getSharedReflectionPass(canvas.width * 0.5, canvas.height * 0.5); 
+        }
     }
 
     onRemove(): void {
@@ -112,7 +120,8 @@ export class WaterLayer implements Custom3DTileRenderLayer {
     }
 
     private handleClick = (e: MapMouseEvent) => {
-        console.log(e);
+        if(!this.reflectionPass || !this.renderer) return; 
+        this.reflectionPass.getRenderTarget().exportTexture(this.renderer,'d'); 
     };
 
     prerender(): void {
@@ -226,10 +235,11 @@ export class WaterLayer implements Custom3DTileRenderLayer {
     }
 
     animate() {
-        if (!this.waterMaterial) {
+        if (!this.waterMaterial || !this.reflectionPass) {
             return;
         }
-        this.waterMaterial.uniforms.time.value += 0.016;
+        this.waterMaterial.updateReflectionTexture(this.reflectionPass.getRenderTarget().getTexture()); 
+        //this.waterMaterial.uniforms.time.value += 0.016;
     }
 
     render(): void {

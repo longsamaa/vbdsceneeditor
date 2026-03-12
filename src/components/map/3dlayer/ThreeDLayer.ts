@@ -11,6 +11,7 @@ import type {
     ObjectInfo,
     PickHit,
     ShadowCasterLayer,
+    ReflectionCasterLayer,
     ShadowParam,
     ShadowPair,
     UserData
@@ -27,6 +28,7 @@ import {CustomVectorSource} from "../source/CustomVectorSource.ts"
 import {ModelFetch} from "./ModelFetch.ts";
 import type {ShadowLitMaterial} from "../shadow/ShadowLitMaterial.ts";
 import {ShadowMapPass,getSharedShadowPass} from "../shadow/ShadowMapPass.ts";
+import { getSharedReflectionPass, ReflectionPass } from '../water/ReflectionPass.ts';
 import {getSharedRenderer} from "../SharedRenderer.ts";
 
 /** Config cho layer */
@@ -68,7 +70,7 @@ export type ModelCacheEntry = ModelData & {
     stateDownload: DownloadState;
 };
 
-export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer, ShadowCasterLayer {
+export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer, ShadowCasterLayer, ReflectionCasterLayer {
     id: string;
     visible = true;
     onPick?: (info: PickHit) => void;
@@ -97,6 +99,7 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer, ShadowCas
     private readonly clock = new THREE.Clock();
     //shadow
     private shadowMapPass: ShadowMapPass | null = null;
+    private reflectionPass : ReflectionPass | null = null; 
 
 
 
@@ -198,10 +201,6 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer, ShadowCas
                                     const modelType = object.modelType ?? 'Object';
                                     const modelUrl = object.modelUrl ?? '';
                                     const textureUrl = object.textureUrl ?? '';
-                                    if(modelType === 'glb')
-                                    {
-                                        console.log(objects); 
-                                    }
                                     this.modelFetcher.fetch(modelUrl, textureUrl, modelType, modelCacheEntry, (error) => {
                                         if (error) {
                                             console.warn(error);
@@ -236,9 +235,12 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer, ShadowCas
         this.map = map;
         this.camera = new THREE.Camera();
         this.renderer = getSharedRenderer(map.getCanvas(), gl);
-        if(!this.shadowMapPass)
-        {
+        if(!this.shadowMapPass){
             this.shadowMapPass = getSharedShadowPass(8192); 
+        }
+        const canvasSize = map.getCanvas(); 
+        if(!this.reflectionPass){
+            this.reflectionPass = getSharedReflectionPass(canvasSize.width * 0.5,canvasSize.height * 0.5); 
         }
         // thêm sự kiện pick
         map.on('click', this.handleClick);
@@ -290,6 +292,7 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer, ShadowCas
     renderShadowDepth(renderer: THREE.WebGLRenderer, worldSize: number): void {
         if (!this.shadowMapPass || !this.renderer) return;
         const tilesWithShadow: TileCacheEntry[] = [];
+        //ignore all shadow mesh
         for (const tile of this._visibleTiles) {
             const key = this.tileKey(tile);
             const tileInfo = this.tileCache.get(key);
@@ -299,6 +302,7 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer, ShadowCas
                 pair.shadowMesh.visible = false;
             }
         }
+        //shadowPass 
         this.shadowMapPass.shadowPassNoClear(
             renderer,
             this._visibleTiles,
@@ -306,11 +310,45 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer, ShadowCas
             (tile) => this.tileKey(tile),
             (key) => this.tileCache.get(key)?.sceneTile,
         );
+
         for (const tileInfo of tilesWithShadow) {
             for (const pair of tileInfo.shadowsObject) {
                 pair.shadowMesh.visible = true;
             }
         }
+    }
+
+    renderReflection(renderer: THREE.WebGLRenderer, reflectionMatrix: THREE.Matrix4, worldSize: number) : void {
+        //use for render reflection texture 
+        if(!this.reflectionPass || !this.renderer || !this.map) return; 
+        const tilesWithShadow: TileCacheEntry[] = [];
+        const tr = this.map.transform; 
+        //ignore all shadow mesh
+        for (const tile of this._visibleTiles) {
+            const key = this.tileKey(tile);
+            const tileInfo = this.tileCache.get(key);
+            if (!tileInfo || tileInfo.shadowsObject.length === 0) continue;
+            tilesWithShadow.push(tileInfo);
+            for (const pair of tileInfo.shadowsObject) {
+                pair.shadowMesh.visible = false;
+            }
+        }
+        //reflectionPass
+        this.reflectionPass.reflectionPass(
+            renderer,
+            this._visibleTiles,
+            worldSize,
+            (tile) => this.tileKey(tile),
+            (key) => this.tileCache.get(key)?.sceneTile,
+            tr,
+        ); 
+
+        for (const tileInfo of tilesWithShadow) {
+            for (const pair of tileInfo.shadowsObject) {
+                pair.shadowMesh.visible = true;
+            }
+        }
+
     }
 
     shadowPass(tr : any, visibleTiles : OverscaledTileID[]) : void {
@@ -400,7 +438,6 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer, ShadowCas
         }
         //this.shadowRenderPass?.exportTexture(this.renderer,'D:\\');
         // to NDC [-1..1]
-        console.log('threed click'); 
         const canvas = this.map.getCanvas();
         const rect = canvas.getBoundingClientRect();
         const ndc = new THREE.Vector2(

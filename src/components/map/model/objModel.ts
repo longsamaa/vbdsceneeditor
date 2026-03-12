@@ -358,7 +358,7 @@ export function applyShadowLitMaterial(mesh: THREE.Mesh): ShadowLitMaterial {
     }
 
     // side
-    shadowMat.side = origMat.side ?? THREE.FrontSide;
+    shadowMat.side = THREE.DoubleSide;
 
     // vertex colors
     if (origMat.vertexColors && mesh.geometry.hasAttribute('color')) {

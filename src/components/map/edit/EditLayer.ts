@@ -9,6 +9,7 @@ import type {
     LightGroupOption,
     ModelData,
     PickHit,
+    ReflectionCasterLayer,
     ShadowCasterLayer,
     ShadowPair,
     ShadowUserData,
@@ -272,6 +273,11 @@ export class EditLayer implements Custom3DTileRenderLayer, ShadowCasterLayer {
         }
     }
 
+     renderReflection(renderer: THREE.WebGLRenderer, reflectionMatrix: THREE.Matrix4, worldSize: number) : void {
+            //use for render reflection texture 
+    
+    }
+
     renderShadowDepth(renderer: THREE.WebGLRenderer, worldSize: number): void {
         if (!this.shadowMapPass || !this.map) return;
         const tilesWithShadow: DataTileInfoForEditorLayer[] = [];
@@ -532,7 +538,6 @@ export class EditLayer implements Custom3DTileRenderLayer, ShadowCasterLayer {
             shadow_mesh.update(this._tmpLightDir.x, this._tmpLightDir.y, this._tmpLightDir.z / scaleUnit);
         }
     }
-
 
     private updateShadow(scene: THREE.Scene) {
         const sd = this.shadowMapPass?.sunDir;

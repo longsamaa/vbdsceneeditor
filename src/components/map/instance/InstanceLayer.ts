@@ -7,6 +7,7 @@ import type {
     LightGroup,
     LightGroupOption,
     PickHit,
+    ReflectionCasterLayer,
     ShadowCasterLayer,
 } from '../Interface.ts'
 import * as THREE from 'three';
@@ -41,7 +42,7 @@ export type DataTileInfoForInstanceLayer = {
     instanceShadowPairs: InstanceShadowPair[];
 }
 
-export class InstanceLayer implements Custom3DTileRenderLayer, ShadowCasterLayer {
+export class InstanceLayer implements Custom3DTileRenderLayer, ShadowCasterLayer, ReflectionCasterLayer {
     id: string;
     visible: boolean = true;
     onPick?: (info: PickHit) => void;
@@ -362,6 +363,10 @@ export class InstanceLayer implements Custom3DTileRenderLayer, ShadowCasterLayer
                 pair.shadowMesh.visible = true;
             }
         }
+    }
+
+    renderReflection(renderer: THREE.WebGLRenderer, reflectionMatrix: THREE.Matrix4, worldSize: number) : void {
+            //use for render reflection texture 
     }
 
     shadowPass(tr : any, visibleTiles : OverscaledTileID[]) : void {
