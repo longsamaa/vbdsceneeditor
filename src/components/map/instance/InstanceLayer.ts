@@ -18,6 +18,7 @@ import InstancedGroupMesh from "./InstancedGroupMesh.ts";
 import {ShadowLitMaterial} from "../shadow/ShadowLitMaterial.ts"
 import {ShadowMapPass,getSharedShadowPass} from "../shadow/ShadowMapPass.ts";
 import {getSharedRenderer} from "../SharedRenderer.ts";
+import { getSharedReflectionPass, ReflectionPass } from '../water/ReflectionPass.ts';
 import {
     calculateTileMatrixThree,
 } from "../shadow/ShadowCamera.ts";
@@ -73,6 +74,7 @@ export class InstanceLayer implements Custom3DTileRenderLayer, ShadowCasterLayer
     private readonly _projMatrix = new THREE.Matrix4();
     private _visibleTiles: OverscaledTileID[] = [];
     private readonly _tmpLightDir = new THREE.Vector3();
+    private reflectionPass : ReflectionPass | null = null; 
     useOrchestrator = false;
 
     constructor(opts: InstanceLayerOpts & { onPick?: (info: PickHit) => void } & { onPickfail?: () => void }) {
@@ -110,6 +112,10 @@ export class InstanceLayer implements Custom3DTileRenderLayer, ShadowCasterLayer
         if(!this.shadowMapPass)
         {
             this.shadowMapPass = getSharedShadowPass(8192); 
+        }
+        const canvasSize = map.getCanvas(); 
+        if(!this.reflectionPass){
+            this.reflectionPass = getSharedReflectionPass(canvasSize.width * 0.5, canvasSize.height * 0.5); 
         }
         //load glb file
         this.objectUrls.forEach((url) => {
@@ -366,7 +372,43 @@ export class InstanceLayer implements Custom3DTileRenderLayer, ShadowCasterLayer
     }
 
     renderReflection(renderer: THREE.WebGLRenderer, reflectionMatrix: THREE.Matrix4, worldSize: number) : void {
-            //use for render reflection texture 
+        //use for render reflection texture 
+        if(!this.reflectionPass || !this.renderer || !this.map) return; 
+        const tr = this.map.transform; 
+        if (!this.shadowMapPass) return;
+        for (const tile of this._visibleTiles) {
+            const key = this.tileKey(tile.canonical.x, tile.canonical.y, tile.canonical.z);
+            const tileInfo = this.tileCache.get(key);
+            if (!tileInfo) continue;
+            for (const pair of tileInfo.instanceShadowPairs) {
+                pair.shadowMesh.visible = false;
+            }
+        }
+         //reflectionPass
+        this.reflectionPass.reflectionPass(
+            renderer,
+            this._visibleTiles,
+            worldSize,
+            (tile) => this.tileKey(tile.canonical.x,tile.canonical.y,tile.canonical.z),
+            (key) => {
+                const tileCache = this.tileCache.get(key);
+                const scene = tileCache?.sceneTile;
+                if (!scene) return undefined;
+                return {
+                    scene,
+                    shadowLitMats: tileCache.shadowLitMaterials
+                };
+            },
+            tr,
+        ); 
+        for (const tile of this._visibleTiles) {
+            const key = this.tileKey(tile.canonical.x, tile.canonical.y, tile.canonical.z);
+            const tileInfo = this.tileCache.get(key);
+            if (!tileInfo) continue;
+            for (const pair of tileInfo.instanceShadowPairs) {
+                pair.shadowMesh.visible = true;
+            }
+        }
     }
 
     shadowPass(tr : any, visibleTiles : OverscaledTileID[]) : void {

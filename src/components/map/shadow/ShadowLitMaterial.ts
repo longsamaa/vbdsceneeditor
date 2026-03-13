@@ -305,6 +305,10 @@ export class ShadowLitMaterial extends THREE.ShaderMaterial {
         this.uniforms.wrapFactor.value = factor;
     }
 
+    enableShadowMap(bEnable : boolean) : void {
+        this.uniforms.hasShadowMap.value = bEnable;
+    }
+
     /** Call before each mesh render to inject its original texture */
     setMeshMaterial(originalMaterial: THREE.Material | null): void {
         if (!originalMaterial) {

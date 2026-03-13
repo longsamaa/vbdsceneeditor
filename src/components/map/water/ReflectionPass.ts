@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import {WaterRenderTarget} from './WaterRenderTarget'; 
 import type { OverscaledTileID } from 'maplibre-gl';
+import {ShadowLitMaterial} from '../shadow/ShadowLitMaterial'
 
 export class ReflectionPass {
     readonly camera = new THREE.Camera(); 
@@ -30,16 +31,22 @@ export class ReflectionPass {
         visibleTiles : OverscaledTileID[],
         worldSize : number,
         tileKey: (tile: OverscaledTileID) => string,
-        getScene: (key: string) => THREE.Scene | undefined,
+        getSceneAndShadowLitMats: (key: string) => { scene : THREE.Scene, shadowLitMats : ShadowLitMaterial[] } | undefined,
         tr : any,
     ) : void {
         if(visibleTiles.length === 0) return; 
         this.renderTarget.beginReflectionPass(renderer);
+        //disable shadow map 
         for(const tile of visibleTiles) {
             //cal tile matrix refleciton here
             const key = tileKey(tile);
-            const scene = getScene(key);
-            if(!scene) continue; 
+            const tileData = getSceneAndShadowLitMats(key);
+            if(tileData?.shadowLitMats){
+                for (const mat of tileData?.shadowLitMats) {
+                    mat.enableShadowMap(false); 
+                }
+            }
+            if(!tileData?.scene) continue; 
             const projectionData = tr.getProjectionData({
                 overscaledTileID: tile,
                 applyGlobeMatrix: false,
@@ -47,8 +54,14 @@ export class ReflectionPass {
             this.tmpMatrix = this.tmpMatrix.fromArray(projectionData.mainMatrix); 
             this.finalMatrix.multiplyMatrices(this.tmpMatrix,this.reflectionMatrix);
             this.camera.projectionMatrix = this.finalMatrix;
-            renderer.render(scene,this.camera); 
+            renderer.render(tileData.scene,this.camera); 
+            if(tileData?.shadowLitMats){
+                for (const mat of tileData?.shadowLitMats) {
+                    mat.enableShadowMap(false); 
+                }
+            }
         }
+        //disale shadow map 
         this.renderTarget.endReflectionPass(renderer); 
     }
 

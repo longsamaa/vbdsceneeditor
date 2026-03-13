@@ -52,7 +52,8 @@ export class WaterLayer implements Custom3DTileRenderLayer {
     private _projMatrix = new THREE.Matrix4();
     private _visibleTiles: any[] = [];
     private _zoom: number = 0;
-    private reflectionPass : ReflectionPass | null = null; 
+    private reflectionPass : ReflectionPass | null = null;
+    private _sunDir = new THREE.Vector3(0.5, 1.0, 0.5).normalize();
 
     constructor(opts: WaterLayerOpts & { onPick?: (info: PickHit) => void } & { onPickfail?: () => void }) {
         this.id = opts.id;
@@ -66,25 +67,12 @@ export class WaterLayer implements Custom3DTileRenderLayer {
                 t.wrapS = t.wrapT = THREE.RepeatWrapping;
             }
         );
-        this.waterMaterial = new WaterReflectionMaterial(); 
-        // this.waterMaterial = createWaterMaterial({
-        //     color: 0x2a7fff,
-        //     opacity: 0.8,
-        //     tex: this.waterNormalTexture,
-        // });
-        // if (opts.sun) {
-        //     this.sun = {
-        //         altitude: opts.sun.altitude,
-        //         azimuth: opts.sun.azimuth,
-        //         sun_dir: calculateSunDirectionMaplibre(THREE.MathUtils.degToRad(opts.sun.altitude),
-        //             THREE.MathUtils.degToRad(opts.sun.azimuth)),
-        //         shadow: opts.sun.shadow
-        //     }
-        // }
-        // if (this.sun) {
-        //     this.waterMaterial.uniforms.lightDir.value = this.sun.sun_dir.clone().normalize();
-        // }
-        this.minZoom = opts.minZoom ?? 0;
+        this.waterMaterial = new WaterReflectionMaterial(null, this.waterNormalTexture);
+        if (opts.sun) {
+            this.setSun(opts.sun);
+        }
+        this.waterMaterial.opacity = 1.0; 
+        this.minZoom = opts.minZoom ?? 16;
         this.maxZoom = opts.maxZoom ?? 20;
     }
 
@@ -120,15 +108,21 @@ export class WaterLayer implements Custom3DTileRenderLayer {
     }
 
     private handleClick = (e: MapMouseEvent) => {
-        if(!this.reflectionPass || !this.renderer) return; 
-        this.reflectionPass.getRenderTarget().exportTexture(this.renderer,'d'); 
+        if(!this.reflectionPass || !this.renderer || !this.map) return;
+        const center = this.map.getCenter();
+        console.log('Water click:', {
+            pitch: this.map.getPitch(),
+            bearing: this.map.getBearing(),
+            zoom: this.map.getZoom(),
+            center: { lat: center.lat, lng: center.lng },
+        });
     };
 
     prerender(): void {
         if (!this.map || !this.vectorSource || !this.isRebuildWaterGeometry) {
             return;
         }
-        if (this.map.getZoom() < this.minZoom) return;
+        if (this.map.getZoom() <= this.minZoom) return;
         this._zoom = clampZoom(
             this.vectorSource.minZoom,
             this.vectorSource.maxZoom,
@@ -234,19 +228,42 @@ export class WaterLayer implements Custom3DTileRenderLayer {
         }
     }
 
+    setSun(sun: SunOptions): void {
+        this.sun = {
+            altitude: sun.altitude,
+            azimuth: sun.azimuth,
+            sun_dir: new THREE.Vector3(),
+            shadow: sun.shadow,
+            lat: sun.lat,
+            lon: sun.lon,
+        };
+        calculateSunDirectionMaplibre(
+            THREE.MathUtils.degToRad(sun.altitude),
+            THREE.MathUtils.degToRad(sun.azimuth),
+            this._sunDir,
+        );
+        if (this.waterMaterial) {
+            this.waterMaterial.setLightDir(this._sunDir);
+        }
+    }
+
     animate() {
         if (!this.waterMaterial || !this.reflectionPass) {
             return;
         }
-        this.waterMaterial.updateReflectionTexture(this.reflectionPass.getRenderTarget().getTexture()); 
-        //this.waterMaterial.uniforms.time.value += 0.016;
+        this.waterMaterial.updateReflectionTexture(this.reflectionPass.getRenderTarget().getTexture());
+        if (this.waterNormalTexture) {
+            this.waterMaterial.updateNormalMap(this.waterNormalTexture);
+        }
+        this.waterMaterial.setTime(this.waterMaterial.uniforms.time.value + 0.016);
     }
 
     render(): void {
-        if (!this.map || !this.camera || !this.renderer || !this.visible || !this.vectorSource || !this.mainScene) {
+        if (!this.map || !this.camera || !this.renderer || !this.visible || !this.vectorSource || !this.mainScene ) {
             return;
         }
         const tr = this.map.transform;
+        if(tr.zoom <= this.minZoom) return; 
         for (const tile of this._visibleTiles) {
             const tile_key = this.tileKey(tile.canonical.x, tile.canonical.y, tile.canonical.z);
             if (tile_key === this.tilekeyToDrawWater) {

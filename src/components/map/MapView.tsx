@@ -317,7 +317,7 @@ function createDefaultMap(map: maplibregl.Map, overlay_layer: OverlayLayer, outl
     const reflectionOrchestrator = new ReflectionOrchestrator('reflection-orchestrator');
     map.addLayer(reflectionOrchestrator); 
     reflectionOrchestrator.register(map4d_layer); 
-
+    reflectionOrchestrator.register(instance_layer); 
     const waterLayer = new WaterLayer({
         id: 'test_water_layer',
         applyGlobeMatrix: false,
@@ -377,9 +377,10 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(({
             container: mapContainer.current,
             style: 'style/vbd_style.json',
             center,
-            zoom: 16,
-            pitch: 60,
-            bearing: 67.97536302882756,
+            zoom: 17,
+            pitch: 80,
+            maxPitch: 60,
+            bearing: -60.32393898989722,
             pixelRatio: Math.min(window.devicePixelRatio, 2),
             maxZoom: 22,
             canvasContextAttributes: HIGH_PERFORMANCE_RENDER ? { antialias: true } : {}

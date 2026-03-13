@@ -25,7 +25,7 @@ export class WaterRenderTarget {
         renderer.setRenderTarget(this.reflectionTarget);
         const oldClearColor = renderer.getClearColor(new THREE.Color());
         const oldClearAlpha = renderer.getClearAlpha();
-        renderer.setClearColor(new THREE.Color(0.5, 0.7, 1.0), 1);
+        renderer.setClearColor(new THREE.Color(0x3A7070), 1);
         renderer.clear(true, true, false);
         renderer.setClearColor(oldClearColor, oldClearAlpha);
     }

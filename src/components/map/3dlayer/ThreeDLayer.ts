@@ -70,7 +70,9 @@ export type ModelCacheEntry = ModelData & {
     stateDownload: DownloadState;
 };
 
-export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer, ShadowCasterLayer, ReflectionCasterLayer {
+export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer, 
+        ShadowCasterLayer,
+        ReflectionCasterLayer {
     id: string;
     visible = true;
     onPick?: (info: PickHit) => void;
@@ -339,7 +341,15 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer, ShadowCas
             this._visibleTiles,
             worldSize,
             (tile) => this.tileKey(tile),
-            (key) => this.tileCache.get(key)?.sceneTile,
+            (key) => {
+                const tileCache = this.tileCache.get(key);
+                const scene = tileCache?.sceneTile;
+                if (!scene) return undefined;
+                return {
+                    scene,
+                    shadowLitMats: tileCache.shadowLitMaterials
+                };
+            },
             tr,
         ); 
 
