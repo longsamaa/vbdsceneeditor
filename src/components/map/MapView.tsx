@@ -1,5 +1,5 @@
 // MapView.tsx
-import React, {forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState} from 'react';
+import React, {forwardRef, lazy, Suspense, useCallback, useEffect, useImperativeHandle, useRef, useState} from 'react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import * as THREE from 'three';
@@ -25,6 +25,8 @@ import {getSunPosition} from "./shadow/ShadowHelper.ts"
 import {ObjectTreePanel, type TileNode} from "../toolbar/ObjectTreePanel.tsx"
 import {PropertiesPanel, type ObjectProperties} from "../toolbar/PropertiesPanel.tsx"
 import {GraphicsSettings, type GraphicsConfig} from "../toolbar/GraphicsSettings.tsx"
+
+const Editor = lazy(() => import('../nodeeditor/Editor'));
 
 interface MapViewProps {
     center?: [number, number];
@@ -369,6 +371,7 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(({
     const [activeLayerEditable, setActiveLayerEditable] = useState(false);
     const [activeLayerIsDb, setActiveLayerIsDb] = useState(false);
     const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
+    const [showNodeEditor, setShowNodeEditor] = useState(false);
     const pickedObject = useRef<THREE.Object3D | null>(null);
 
     useEffect(() => {
@@ -461,6 +464,7 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(({
         overlay_layer.current?.unselect();
         outline_layer.current?.unselect();
         pickedObject.current = null;
+        if (map.current) (map.current as any)._selectedObject = null;
         setSelectedProps(null);
         mgr.setCurrentLayer(id);
         const layer = mgr.layer_cache.get(id);
@@ -473,6 +477,7 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(({
             outline_layer.current?.setCurrentTileID(info.overScaledTileId);
             outline_layer.current?.attachObject(info.object);
             pickedObject.current = info.object;
+            if (map.current) (map.current as any)._selectedObject = info.object;
             setSelectedProps(buildPropsFromObject(info.object));
             map.current?.triggerRepaint();
         });
@@ -480,6 +485,7 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(({
             overlay_layer.current?.unselect();
             outline_layer.current?.unselect();
             pickedObject.current = null;
+            if (map.current) (map.current as any)._selectedObject = null;
             setSelectedProps(null);
         });
         // Update object tree panel
@@ -575,7 +581,7 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(({
                     properties={selectedProps}
                     editable={activeLayerEditable}
                     showDbActions={activeLayerIsDb}
-                    onClose={() => { setSelectedProps(null); pickedObject.current = null; }}
+                    onClose={() => { setSelectedProps(null); pickedObject.current = null; if (map.current) (map.current as any)._selectedObject = null; }}
                     onUpdate={(props) => {
                         const obj = pickedObject.current;
                         if (!obj) return;
@@ -642,6 +648,7 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(({
                                 overlay_layer.current?.unselect();
                                 outline_layer.current?.unselect();
                                 pickedObject.current = null;
+                                if (map.current) (map.current as any)._selectedObject = null;
                                 setSelectedProps(null);
                                 try {
                                     const map4dLayer = editorLayerManager.current?.layer_cache.get(MAP4D_LAYER_ID) as Map4DModelsThreeLayer | undefined;
@@ -671,6 +678,39 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(({
                 >
                     {toast.msg}
                 </div>
+            )}
+            <button
+                onClick={() => setShowNodeEditor(true)}
+                title="Node Editor"
+                style={{
+                    position: 'fixed',
+                    top: 400,
+                    left: 10,
+                    zIndex: 10000,
+                    background: '#4a90d9',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: 8,
+                    width: 40,
+                    height: 40,
+                    padding: 0,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+                }}
+            >
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="2" y="3" width="7" height="7" rx="1.5" />
+                    <rect x="15" y="14" width="7" height="7" rx="1.5" />
+                    <path d="M9 6.5h3a2 2 0 0 1 2 2v7a2 2 0 0 0 2 2h-1" />
+                </svg>
+            </button>
+            {showNodeEditor && (
+                <Suspense fallback={<div style={{position:'fixed',inset:0,zIndex:9999,background:'#1e1e1e',color:'#fff',display:'flex',alignItems:'center',justifyContent:'center'}}>Loading...</div>}>
+                    <Editor onClose={() => setShowNodeEditor(false)} map={map.current} />
+                </Suspense>
             )}
         </div>
     );

@@ -250,43 +250,18 @@ export function createShadowGroup(scene: THREE.Scene): void {
 }
 
 export function objectEnableClippingPlaneZ(object: THREE.Object3D, enable: boolean): void {
+    const planeZ = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
     object.traverse((child) => {
         if (child instanceof THREE.Mesh) {
-            const mat: THREE.Material = child.material;
-            //mat phang z vector huong len
-            const planeZ = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
-            if (Array.isArray(mat)) {
-                mat.forEach(m => {
-                    //Tat clipping plane
-                    if (!enable) {
-                        m.clippingPlanes = [];
-                        m.clipIntersection = false;
-                        m.clipShadows = false;
-                        m.needsUpdate = true;
-                    } else {
-                        //bat clipping plane
-                        m.clippingPlanes = [planeZ];
-                        m.clipIntersection = false;
-                        m.clipShadows = false;
-                        m.needsUpdate = true;
-                    }
-                });
-            } else {
-                if (!enable) {
-                    mat.clippingPlanes = [];
-                    mat.clipIntersection = false;
-                    mat.clipShadows = false;
-                    mat.needsUpdate = true;
-                } else {
-                    //bat clipping plane
-                    mat.clippingPlanes = [planeZ];
-                    mat.clipIntersection = false;
-                    mat.clipShadows = false;
-                    mat.needsUpdate = true;
+            const mats: THREE.Material[] = Array.isArray(child.material) ? child.material : [child.material];
+            for (const m of mats) {
+                if (m instanceof ShadowLitMaterial) {
+                    m.setClippingPlane(enable ? planeZ : null);
+                    m.needsUpdate = true;
                 }
             }
         }
-    })
+    });
 }
 
 export function transformModel(posX: number,

@@ -16,7 +16,6 @@ export function getSharedRenderer(canvas: HTMLCanvasElement, gl: WebGLRenderingC
             stencil: true,
         });
         sharedRenderer.autoClear = false;
-        sharedRenderer.localClippingEnabled = true;
     }
     return sharedRenderer;
 }

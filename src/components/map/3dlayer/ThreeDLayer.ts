@@ -30,6 +30,7 @@ import type {ShadowLitMaterial} from "../shadow/ShadowLitMaterial.ts";
 import {ShadowMapPass,getSharedShadowPass} from "../shadow/ShadowMapPass.ts";
 import { getSharedReflectionPass, ReflectionPass } from '../water/ReflectionPass.ts';
 import {getSharedRenderer} from "../SharedRenderer.ts";
+import { clone } from '@turf/turf';
 
 /** Config cho layer */
 export type Map4DModelsLayerOptions = {
@@ -651,7 +652,8 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer,
                 continue;
             }
             // scale theo vĩ độ/zoom như code của bạn
-            const cloneObj3d = this.shallowCloneModel(cached.object3d);
+           // const cloneObj3d = this.shallowCloneModel(cached.object3d);
+           const cloneObj3d = cached.object3d.clone(true); 
             cloneObj3d.name = objectId;
             const lat_lon: LatLon = tileLocalToLatLon(
                 z,

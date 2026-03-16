@@ -40,6 +40,7 @@ export class ShadowLitMaterial extends THREE.ShaderMaterial {
     constructor(shadowMap: THREE.WebGLRenderTarget | null = null) {
         super({
             side: THREE.DoubleSide,
+            clipping: true,
             polygonOffset: true,
             polygonOffsetFactor: 2,
             polygonOffsetUnits: 2,
@@ -70,6 +71,8 @@ export class ShadowLitMaterial extends THREE.ShaderMaterial {
                 biasBase:      { value: 0.00001 },
                 biasSlope:     { value: 0.000001 },
                 shadowThreshold: { value: 0.6 },
+                clippingPlane:   { value: new THREE.Vector4(0, 0, 0, 0) },
+                useClipping:     { value: 0 },
             },
             vertexShader: /* glsl */`
                 uniform mat4 lightMatrix;
@@ -104,6 +107,8 @@ export class ShadowLitMaterial extends THREE.ShaderMaterial {
                 }
             `,
             fragmentShader: /* glsl */`
+                uniform vec4 clippingPlane;
+                uniform int useClipping;
                 uniform sampler2D shadowMap;
                 uniform sampler2D baseMap;
                 uniform sampler2D alphaMap;
@@ -167,6 +172,10 @@ export class ShadowLitMaterial extends THREE.ShaderMaterial {
                 }
 
                 void main() {
+                    if (useClipping == 1) {
+                        float d = dot(vWorldPos, clippingPlane.xyz) + clippingPlane.w;
+                        if (d < 0.0) discard;
+                    }
                     // --- Albedo ---
                     vec3 albedo = baseColor;
                     float alpha = uOpacity;
@@ -303,6 +312,15 @@ export class ShadowLitMaterial extends THREE.ShaderMaterial {
 
     setWrapFactor(factor: number): void {
         this.uniforms.wrapFactor.value = factor;
+    }
+
+    setClippingPlane(plane: THREE.Plane | null): void {
+        if (plane) {
+            this.uniforms.clippingPlane.value.set(plane.normal.x, plane.normal.y, plane.normal.z, plane.constant);
+            this.uniforms.useClipping.value = 1;
+        } else {
+            this.uniforms.useClipping.value = 0;
+        }
     }
 
     enableShadowMap(bEnable : boolean) : void {

@@ -362,7 +362,7 @@ export class EditLayer implements Custom3DTileRenderLayer, ShadowCasterLayer {
     }
 
     render(): void {
-        if (!this.map || !this.renderer) return;
+        if (!this.map || !this.renderer || !this.visible) return;
         const zoom = clampZoom(this.editorLevel,
             this.editorLevel,
             Math.round(this.map.getZoom()));
