@@ -152,6 +152,14 @@ export interface ReflectionCasterLayer {
     renderReflection(renderer: THREE.WebGLRenderer, reflectionMatrix: THREE.Matrix4, worldSize: number): void;
 }
 
+export interface PrerenderGeometryLayer {
+    id: string;
+    /** Prerender to determine which tiles contain water/river polygons */
+    prerenderGeometry(): void;
+    /** Returns true if this layer has any visible geometry after prerender */
+    hasGeometry(): boolean;
+}
+
 
 
 

@@ -2,7 +2,7 @@ import maplibregl, {MapMouseEvent,} from 'maplibre-gl';
 import {reverseFaceWinding} from '../model/objModel.ts';
 import {classifyRings} from '@mapbox/vector-tile';
 import {clampZoom, latlonToLocal} from '../convert/map_convert.ts';
-import type {Custom3DTileRenderLayer, PickHit, SunOptions, SunParamater} from '../Interface.ts'
+import type {Custom3DTileRenderLayer, PickHit, SunOptions, SunParamater, PrerenderGeometryLayer} from '../Interface.ts'
 import * as THREE from 'three';
 import {CustomVectorSource} from "../source/CustomVectorSource.ts"
 import {buildGeo, triangulatePolygonWithHoles} from "../source/GeojsonConverter.ts";
@@ -23,7 +23,7 @@ export type WaterLayerOpts = {
     maxZoom?: number,
 }
 
-export class WaterLayer implements Custom3DTileRenderLayer {
+export class WaterLayer implements Custom3DTileRenderLayer, PrerenderGeometryLayer {
     id: string;
     visible: boolean = true;
     onPick?: (info: PickHit) => void;
@@ -53,6 +53,7 @@ export class WaterLayer implements Custom3DTileRenderLayer {
     private _visibleTiles: any[] = [];
     private _zoom: number = 0;
     private reflectionPass : ReflectionPass | null = null;
+    private _registeredPrerender: boolean = false;
     private _sunDir = new THREE.Vector3(0.5, 1.0, 0.5).normalize();
 
     constructor(opts: WaterLayerOpts & { onPick?: (info: PickHit) => void } & { onPickfail?: () => void }) {
@@ -119,6 +120,11 @@ export class WaterLayer implements Custom3DTileRenderLayer {
     };
 
     prerender(): void {
+        if (this._registeredPrerender) return;
+        this._doPrerenderGeometry();
+    }
+
+    private _doPrerenderGeometry(): void {
         if (!this.map || !this.vectorSource || !this.isRebuildWaterGeometry) {
             return;
         }
@@ -186,6 +192,7 @@ export class WaterLayer implements Custom3DTileRenderLayer {
         }
 
         if(polygonToMerge.length === 0){
+            this.waterGeometry = null;
             this.isRebuildWaterGeometry = false;
             return;
         }
@@ -226,6 +233,18 @@ export class WaterLayer implements Custom3DTileRenderLayer {
         } finally {
             this.isRebuildWaterGeometry = false;
         }
+    }
+
+    setRegisteredPrerender(value: boolean): void {
+        this._registeredPrerender = value;
+    }
+
+    prerenderGeometry(): void {
+        this._doPrerenderGeometry();
+    }
+
+    hasGeometry(): boolean {
+        return this.waterGeometry !== null;
     }
 
     setSun(sun: SunOptions): void {

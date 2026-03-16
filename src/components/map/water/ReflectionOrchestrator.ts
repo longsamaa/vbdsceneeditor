@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import maplibregl, {MapMouseEvent,} from 'maplibre-gl';
 import type {CustomLayerInterface, Map} from 'maplibre-gl';
-import type {ReflectionCasterLayer} from '../Interface';
+import type {ReflectionCasterLayer, PrerenderGeometryLayer} from '../Interface';
 import {WaterRenderTarget} from './WaterRenderTarget';
 import {getSharedRenderer} from '../SharedRenderer';
 import { getSharedReflectionPass, ReflectionPass } from './ReflectionPass';
@@ -23,6 +23,7 @@ export class ReflectionOrchestrator implements CustomLayerInterface {
     private renderer: THREE.WebGLRenderer | null = null;
     private readonly renderTarget: WaterRenderTarget;
     private readonly casters: ReflectionCasterLayer[] = [];
+    private readonly prerenderLayers: PrerenderGeometryLayer[] = [];
     private reflectionPass : ReflectionPass | null = null; 
     private reflectionMatrix = new THREE.Matrix4().set(
         1, 0,  0, 0,
@@ -67,6 +68,17 @@ export class ReflectionOrchestrator implements CustomLayerInterface {
         if (idx >= 0) this.casters.splice(idx, 1);
     }
 
+    registerPrerenderLayer(layer: PrerenderGeometryLayer): void {
+        if (!this.prerenderLayers.find(l => l.id === layer.id)) {
+            this.prerenderLayers.push(layer);
+        }
+    }
+
+    unregisterPrerenderLayer(layerId: string): void {
+        const idx = this.prerenderLayers.findIndex(l => l.id === layerId);
+        if (idx >= 0) this.prerenderLayers.splice(idx, 1);
+    }
+
     setWaterPlaneZ(z: number): void {
         this.waterPlaneZ = z;
     }
@@ -98,25 +110,25 @@ export class ReflectionOrchestrator implements CustomLayerInterface {
     }
 
     prerender(): void {
-        // no-op: wait for all layers' prerender to populate tiles
+        for (const layer of this.prerenderLayers) {
+            layer.prerenderGeometry();
+        }
     }
 
     render(): void {
         if (!this.map || !this.renderer || this.casters.length === 0 || !this.reflectionPass) return;
-        const tr = (this.map as any).transform;
 
-        this.reflectionPass.clearReflection(this.renderer); 
-        // // 4. Render reflected scene from all registered casters
+        // Skip reflection rendering if no prerender layer has geometry (no river/water polygons)
+        const hasAnyGeometry = this.prerenderLayers.some(l => l.hasGeometry());
+        if (!hasAnyGeometry) return;
+        const tr = (this.map as any).transform;
+        this.reflectionPass.clearReflection(this.renderer);
         for (const caster of this.casters) {
              if (!caster.visible) continue;
             caster.renderReflection(this.renderer, this.reflectionMatrix, tr.worldSize);
         }
         // // 6. Reset WebGL state
         this.renderer.resetState();
-        // if(this.isClick){
-        //     this.renderTarget.exportTexture(this.renderer,'d'); 
-        //     this.isClick = false; 
-        // }
     }
 
     resizeReflectionMap(size: number): void {

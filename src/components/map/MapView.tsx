@@ -326,6 +326,8 @@ function createDefaultMap(map: maplibregl.Map, overlay_layer: OverlayLayer, outl
         sun: sun_options,
     });
     waterLayer.setVectorSource(customSource);
+    reflectionOrchestrator.registerPrerenderLayer(waterLayer);
+    waterLayer.setRegisteredPrerender(true);
     map.addLayer(waterLayer);
 }
 
@@ -377,10 +379,10 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(({
             container: mapContainer.current,
             style: 'style/vbd_style.json',
             center,
-            zoom: 17,
-            pitch: 80,
+            zoom: 17.168970383915713,
+            pitch: 60,
             maxPitch: 60,
-            bearing: -60.32393898989722,
+            bearing: 45.89774269853467,
             pixelRatio: Math.min(window.devicePixelRatio, 2),
             maxZoom: 22,
             canvasContextAttributes: HIGH_PERFORMANCE_RENDER ? { antialias: true } : {}

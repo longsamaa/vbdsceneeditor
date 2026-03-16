@@ -1,26 +1,28 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { NodeEditor, ClassicPreset } from 'rete';
-import type { GetSchemes } from 'rete';
 import { AreaPlugin, AreaExtensions } from 'rete-area-plugin';
 import { ConnectionPlugin, Presets as ConnectionPresets } from 'rete-connection-plugin';
 import { ReactPlugin, Presets as ReactPresets } from 'rete-react-plugin';
-import type { ReactArea2D } from 'rete-react-plugin';
+import { DataflowEngine } from 'rete-engine';
+import type { DataflowNode } from 'rete-engine';
 import { createRoot } from 'react-dom/client';
 
-type Schemes = GetSchemes<
-    ClassicPreset.Node,
-    ClassicPreset.Connection<ClassicPreset.Node, ClassicPreset.Node>
->;
-type AreaExtra = ReactArea2D<Schemes>;
+// --- Sockets ---
 
 const numberSocket = new ClassicPreset.Socket('number');
 const stringSocket = new ClassicPreset.Socket('string');
+
+// --- Nodes with data() for DataflowEngine ---
 
 class NumberNode extends ClassicPreset.Node {
     constructor(initial: number = 0) {
         super('Number');
         this.addOutput('value', new ClassicPreset.Output(numberSocket, 'Value'));
         this.addControl('number', new ClassicPreset.InputControl('number', { initial }));
+    }
+    data(): Record<string, any> {
+        const ctrl = this.controls['number'] as ClassicPreset.InputControl<'number'>;
+        return { value: ctrl?.value ?? 0 };
     }
 }
 
@@ -31,6 +33,11 @@ class AddNode extends ClassicPreset.Node {
         this.addInput('b', new ClassicPreset.Input(numberSocket, 'B'));
         this.addOutput('result', new ClassicPreset.Output(numberSocket, 'Result'));
     }
+    data(inputs: Record<string, any>): Record<string, any> {
+        const a = (inputs['a'] ?? [0])[0];
+        const b = (inputs['b'] ?? [0])[0];
+        return { result: a + b };
+    }
 }
 
 class SubtractNode extends ClassicPreset.Node {
@@ -39,6 +46,11 @@ class SubtractNode extends ClassicPreset.Node {
         this.addInput('a', new ClassicPreset.Input(numberSocket, 'A'));
         this.addInput('b', new ClassicPreset.Input(numberSocket, 'B'));
         this.addOutput('result', new ClassicPreset.Output(numberSocket, 'Result'));
+    }
+    data(inputs: Record<string, any>): Record<string, any> {
+        const a = (inputs['a'] ?? [0])[0];
+        const b = (inputs['b'] ?? [0])[0];
+        return { result: a - b };
     }
 }
 
@@ -49,6 +61,11 @@ class MultiplyNode extends ClassicPreset.Node {
         this.addInput('b', new ClassicPreset.Input(numberSocket, 'B'));
         this.addOutput('result', new ClassicPreset.Output(numberSocket, 'Result'));
     }
+    data(inputs: Record<string, any>): Record<string, any> {
+        const a = (inputs['a'] ?? [1])[0];
+        const b = (inputs['b'] ?? [1])[0];
+        return { result: a * b };
+    }
 }
 
 class TextNode extends ClassicPreset.Node {
@@ -57,6 +74,10 @@ class TextNode extends ClassicPreset.Node {
         this.addOutput('text', new ClassicPreset.Output(stringSocket, 'Text'));
         this.addControl('text', new ClassicPreset.InputControl('text', { initial }));
     }
+    data(): Record<string, any> {
+        const ctrl = this.controls['text'] as ClassicPreset.InputControl<'text'>;
+        return { text: ctrl?.value ?? '' };
+    }
 }
 
 class OutputNode extends ClassicPreset.Node {
@@ -64,9 +85,16 @@ class OutputNode extends ClassicPreset.Node {
         super('Output');
         this.addInput('value', new ClassicPreset.Input(numberSocket, 'Value'));
     }
+    data(inputs: Record<string, any>): Record<string, any> {
+        const val = (inputs['value'] ?? ['N/A'])[0];
+        return { value: val };
+    }
 }
 
-type NodeFactory = { label: string; create: () => ClassicPreset.Node };
+// --- Node factory ---
+
+type DNode = ClassicPreset.Node & DataflowNode;
+type NodeFactory = { label: string; create: () => DNode };
 
 const NODE_LIST: NodeFactory[] = [
     { label: 'Number', create: () => new NumberNode(0) },
@@ -77,18 +105,101 @@ const NODE_LIST: NodeFactory[] = [
     { label: 'Output', create: () => new OutputNode() },
 ];
 
-async function createEditor(container: HTMLElement) {
-    const editor = new NodeEditor<Schemes>();
-    const area = new AreaPlugin<Schemes, AreaExtra>(container);
-    const connection = new ConnectionPlugin<Schemes, AreaExtra>();
-    const reactPlugin = new ReactPlugin<Schemes, AreaExtra>({ createRoot });
+// --- Editor setup (use `any` for Schemes to avoid rete v2 generic conflicts) ---
+
+type EditorInstance = {
+    editor: NodeEditor<any>;
+    area: AreaPlugin<any, any>;
+    engine: DataflowEngine<any>;
+};
+
+async function createEditor(container: HTMLElement): Promise<EditorInstance> {
+    const editor = new NodeEditor<any>();
+    const area = new AreaPlugin<any, any>(container);
+    const connection = new ConnectionPlugin<any, any>();
+    const reactPlugin = new ReactPlugin<any, any>({ createRoot });
+    const engine = new DataflowEngine<any>();
 
     reactPlugin.addPreset(ReactPresets.classic.setup());
     connection.addPreset(ConnectionPresets.classic.setup());
 
     editor.use(area);
+    editor.use(engine);
     area.use(connection);
     area.use(reactPlugin);
+
+    AreaExtensions.selectableNodes(area, AreaExtensions.selector(), {
+        accumulating: AreaExtensions.accumulateOnCtrl(),
+    });
+
+    // --- Connection selection & deletion ---
+    let selectedConnectionId: string | null = null;
+
+    // Click on connection SVG path to select it
+    container.addEventListener('click', (e) => {
+        const target = e.target as Element;
+        // Check if clicked on an SVG path (connection line)
+        const path = target.closest('path');
+        if (path) {
+            // Walk up to find the connection wrapper with data-testid
+            const wrapper = path.closest('[data-testid="connection"]');
+            if (wrapper) {
+                const connId = wrapper.getAttribute('data-id');
+                if (connId) {
+                    // Deselect previous
+                    container.querySelectorAll('[data-testid="connection"].conn-selected')
+                        .forEach(el => el.classList.remove('conn-selected'));
+                    // Select this one
+                    wrapper.classList.add('conn-selected');
+                    selectedConnectionId = connId;
+                    e.stopPropagation();
+                    return;
+                }
+            }
+        }
+        // Click elsewhere: deselect connection
+        if (selectedConnectionId) {
+            container.querySelectorAll('.conn-selected').forEach(el => el.classList.remove('conn-selected'));
+            selectedConnectionId = null;
+        }
+    }, true);
+
+    // Delete selected nodes/connections on Delete or Backspace
+    const handleKeyDown = async (e: KeyboardEvent) => {
+        if (e.key !== 'Delete' && e.key !== 'Backspace') return;
+        const tgt = e.target as HTMLElement;
+        if (tgt.tagName === 'INPUT' || tgt.tagName === 'TEXTAREA') return;
+
+        // Delete selected connection
+        if (selectedConnectionId) {
+            await editor.removeConnection(selectedConnectionId);
+            selectedConnectionId = null;
+        }
+
+        // Delete selected nodes
+        const selected = editor.getNodes().filter((n: any) => n.selected);
+        for (const node of selected) {
+            const conns = editor.getConnections().filter(
+                (c: any) => c.source === node.id || c.target === node.id
+            );
+            for (const conn of conns) {
+                await editor.removeConnection(conn.id);
+            }
+            await editor.removeNode(node.id);
+        }
+    };
+    container.addEventListener('keydown', handleKeyDown);
+    container.setAttribute('tabindex', '0');
+
+    // Style for selected connections
+    const style = document.createElement('style');
+    style.textContent = `
+        .conn-selected path {
+            stroke: #ff6b6b !important;
+            stroke-width: 5px !important;
+        }
+    `;
+    container.appendChild(style);
 
     const numA = new NumberNode(10);
     const numB = new NumberNode(20);
@@ -111,116 +222,47 @@ async function createEditor(container: HTMLElement) {
 
     AreaExtensions.zoomAt(area, editor.getNodes());
 
-    return { editor, area };
+    return { editor, area, engine };
 }
 
-function executeGraph(editor: NodeEditor<Schemes>): string[] {
-    const nodes = editor.getNodes();
-    const connections = editor.getConnections();
-    const results = new Map<string, Record<string, any>>();
+// --- Execute using DataflowEngine ---
+
+async function executeGraph(inst: EditorInstance): Promise<string[]> {
+    const { editor, engine } = inst;
     const logs: string[] = [];
 
-    // Build dependency graph
-    const incomingMap = new Map<string, { nodeId: string; outputKey: string; inputKey: string }[]>();
-    for (const conn of connections) {
-        const list = incomingMap.get(conn.target) || [];
-        list.push({ nodeId: conn.source, outputKey: conn.sourceOutput, inputKey: conn.targetInput });
-        incomingMap.set(conn.target, list);
-    }
+    engine.reset();
 
-    // Topological sort (simple BFS)
-    const inDegree = new Map<string, number>();
-    for (const n of nodes) inDegree.set(n.id, 0);
-    for (const conn of connections) {
-        inDegree.set(conn.target, (inDegree.get(conn.target) || 0) + 1);
-    }
-    const queue: string[] = [];
-    for (const [id, deg] of inDegree) {
-        if (deg === 0) queue.push(id);
-    }
-    const sorted: string[] = [];
-    while (queue.length > 0) {
-        const id = queue.shift()!;
-        sorted.push(id);
-        for (const conn of connections) {
-            if (conn.source === id) {
-                const newDeg = (inDegree.get(conn.target) || 1) - 1;
-                inDegree.set(conn.target, newDeg);
-                if (newDeg === 0) queue.push(conn.target);
-            }
+    const nodes = editor.getNodes();
+    const connections = editor.getConnections();
+
+    // Find leaf nodes (no outgoing connections)
+    const sources = new Set(connections.map((c: any) => c.source));
+    const leafNodes = nodes.filter((n: any) => !sources.has(n.id));
+    const targets = leafNodes.length > 0 ? leafNodes : nodes;
+
+    for (const node of targets) {
+        try {
+            const result = await engine.fetch(node.id);
+            const values = Object.entries(result)
+                .map(([k, v]) => `${k}: ${JSON.stringify(v)}`)
+                .join(', ');
+            logs.push(`[${node.label}] ${values}`);
+        } catch (e: any) {
+            logs.push(`[${node.label}] Error: ${e.message}`);
         }
-    }
-
-    // Execute nodes in order
-    for (const nodeId of sorted) {
-        const node = nodes.find(n => n.id === nodeId);
-        if (!node) continue;
-
-        const inputs: Record<string, any> = {};
-        const incoming = incomingMap.get(nodeId) || [];
-        for (const inc of incoming) {
-            const sourceResults = results.get(inc.nodeId);
-            if (sourceResults) {
-                inputs[inc.inputKey] = sourceResults[inc.outputKey];
-            }
-        }
-
-        const outputs: Record<string, any> = {};
-
-        switch (node.label) {
-            case 'Number': {
-                const ctrl = node.controls['number'] as ClassicPreset.InputControl<'number'> | undefined;
-                outputs['value'] = ctrl?.value ?? 0;
-                logs.push(`[Number] = ${outputs['value']}`);
-                break;
-            }
-            case 'Text': {
-                const ctrl = node.controls['text'] as ClassicPreset.InputControl<'text'> | undefined;
-                outputs['text'] = ctrl?.value ?? '';
-                logs.push(`[Text] = "${outputs['text']}"`);
-                break;
-            }
-            case 'Add': {
-                const a = inputs['a'] ?? 0;
-                const b = inputs['b'] ?? 0;
-                outputs['result'] = a + b;
-                logs.push(`[Add] ${a} + ${b} = ${outputs['result']}`);
-                break;
-            }
-            case 'Subtract': {
-                const a = inputs['a'] ?? 0;
-                const b = inputs['b'] ?? 0;
-                outputs['result'] = a - b;
-                logs.push(`[Subtract] ${a} - ${b} = ${outputs['result']}`);
-                break;
-            }
-            case 'Multiply': {
-                const a = inputs['a'] ?? 0;
-                const b = inputs['b'] ?? 0;
-                outputs['result'] = a * b;
-                logs.push(`[Multiply] ${a} * ${b} = ${outputs['result']}`);
-                break;
-            }
-            case 'Output': {
-                const val = inputs['value'] ?? 'N/A';
-                logs.push(`[Output] => ${val}`);
-                break;
-            }
-            default:
-                logs.push(`[${node.label}] (unknown)`);
-        }
-
-        results.set(nodeId, outputs);
     }
 
     return logs;
 }
 
-type MenuState = { visible: false } | { visible: true; x: number; y: number; clientX: number; clientY: number };
+// --- Component ---
+
+type MenuState = { visible: false } | { visible: true; x: number; y: number };
 
 export default function ReteEditor({ onClose }: { onClose: () => void }) {
     const containerRef = useRef<HTMLDivElement>(null);
-    const editorRef = useRef<{ editor: NodeEditor<Schemes>; area: AreaPlugin<Schemes, AreaExtra> } | null>(null);
+    const editorRef = useRef<EditorInstance | null>(null);
     const [menu, setMenu] = useState<MenuState>({ visible: false });
     const [search, setSearch] = useState('');
     const [execLog, setExecLog] = useState<string[] | null>(null);
@@ -246,8 +288,6 @@ export default function ReteEditor({ onClose }: { onClose: () => void }) {
             visible: true,
             x: e.clientX - rect.left,
             y: e.clientY - rect.top,
-            clientX: e.clientX,
-            clientY: e.clientY,
         });
         setSearch('');
     }, []);
@@ -261,6 +301,14 @@ export default function ReteEditor({ onClose }: { onClose: () => void }) {
         await area.translate(node.id, { x, y });
         setMenu({ visible: false });
     }, [menu]);
+
+    const handleExecute = useCallback(async () => {
+        if (!editorRef.current) return;
+        const logs = await executeGraph(editorRef.current);
+        setExecLog(logs);
+        console.log('--- Execute Graph (DataflowEngine) ---');
+        logs.forEach(l => console.log(l));
+    }, []);
 
     const filtered = NODE_LIST.filter(n =>
         n.label.toLowerCase().includes(search.toLowerCase())
@@ -297,13 +345,7 @@ export default function ReteEditor({ onClose }: { onClose: () => void }) {
                 <span style={{ color: '#fff', fontSize: 13, fontWeight: 600 }}>Node Editor</span>
                 <div style={{ display: 'flex', gap: 6 }}>
                     <button
-                        onClick={() => {
-                            if (!editorRef.current) return;
-                            const logs = executeGraph(editorRef.current.editor);
-                            setExecLog(logs);
-                            console.log('--- Execute Graph ---');
-                            logs.forEach(l => console.log(l));
-                        }}
+                        onClick={handleExecute}
                         style={{
                             background: '#4caf50',
                             color: '#fff',
