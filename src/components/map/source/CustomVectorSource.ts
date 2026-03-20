@@ -4,11 +4,11 @@ import {TileFetcher} from './TileFetcher'
 import type {WorkerOutput} from './SourceWorker.ts'
 import type {JsonVectorTile} from './GeojsonConverter.ts'
 import maplibregl, {OverscaledTileID,} from 'maplibre-gl';
+import type {DataTileState} from './SourceInterface.ts'
 
-type CustomVectorTileState = 'preparing' | 'loaded' | 'error' | 'disposed';
 type CustomVectorTileData = {
     data: JsonVectorTile | null;
-    state: CustomVectorTileState;
+    state: DataTileState;
 }
 
 export type CustomVectorSourceOpts = {
@@ -28,7 +28,7 @@ export type GetTileOptions = {
 export class CustomVectorSource implements CustomSource {
     id: string;
     url: string;
-    readonly type = 'custom' as const;
+    readonly type = 'custom_vector' as const;
     minZoom: number;
     maxZoom: number;
     tileSize: number = 512;
@@ -67,6 +67,7 @@ export class CustomVectorSource implements CustomSource {
             }
         };
     }
+    
     private tileKey(tile: OverscaledTileID): string {
         const c = tile.canonical;
         return `${c.z}/${c.x}/${c.y}`;

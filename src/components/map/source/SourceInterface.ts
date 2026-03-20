@@ -6,3 +6,4 @@ export interface CustomSource {
     maxZoom: number;
     tileSize: number;
 }
+export type DataTileState = 'preparing' | 'loaded' | 'error' | 'disposed';

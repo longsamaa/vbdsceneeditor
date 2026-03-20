@@ -3,7 +3,7 @@ import {ShadowDepthMaterial} from './ShadowLitMaterial';
 import {ShadowRenderTarget} from './ShadowRenderTarget';
 import {calculateTileMatrixThree, createShadowMapMatrixOrtho} from './ShadowCamera';
 import {projectToWorldCoordinates} from '../convert/map_convert';
-import {calculateSunDirectionMaplibre, getSunPosition, getTimeOfDayColors, type TimeOfDayColors} from './ShadowHelper';
+import {calculateSunDirectionMaplibre, getTimeOfDayColors, type TimeOfDayColors} from './ShadowHelper';
 import type {OverscaledTileID} from 'maplibre-gl';
 import type {SunOptions} from '../Interface';
 
@@ -177,6 +177,7 @@ export class ShadowMapPass {
             scene.overrideMaterial = null;
         }
         this.renderTarget.endRenderShadowPass(renderer);
+        renderer.resetState();
     }
 
     resizeShadowMap(size: number): void {

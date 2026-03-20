@@ -7,7 +7,7 @@ import * as THREE from 'three';
 import {CustomVectorSource} from "../source/CustomVectorSource.ts"
 import {buildGeo, triangulatePolygonWithHoles} from "../source/GeojsonConverter.ts";
 import type {Feature, GeoJsonProperties, MultiPolygon, Polygon, Position} from 'geojson';
-import {createWaterMaterial,WaterReflectionMaterial} from "./WaterMaterial.ts";
+import {WaterReflectionMaterial, type WaterSettings} from "./WaterMaterial.ts";
 import * as turf from "@turf/turf";
 import {calculateSunDirectionMaplibre} from "../shadow/ShadowHelper.ts";
 import {getSharedRenderer} from "../SharedRenderer.ts";
@@ -17,10 +17,11 @@ export type WaterLayerOpts = {
     id: string;
     applyGlobeMatrix: boolean;
     sourceLayer: string,
-    normalUrl: string,
+    normalUrl?: string,
     sun?: SunOptions;
     minZoom?: number,
     maxZoom?: number,
+    settings?: Partial<WaterSettings>,
 }
 
 export class WaterLayer implements Custom3DTileRenderLayer, PrerenderGeometryLayer {
@@ -28,6 +29,7 @@ export class WaterLayer implements Custom3DTileRenderLayer, PrerenderGeometryLay
     visible: boolean = true;
     onPick?: (info: PickHit) => void;
     onPickfail?: () => void;
+    pickEnabled: boolean = true;
     layerSourceCastShadow: Custom3DTileRenderLayer | null = null;
     sourceLayer: string;
     readonly type = 'custom' as const;
@@ -62,17 +64,21 @@ export class WaterLayer implements Custom3DTileRenderLayer, PrerenderGeometryLay
         this.onPick = opts.onPick;
         this.onPickfail = opts.onPickfail;
         this.sourceLayer = opts.sourceLayer;
-        this.waterNormalTexture = new THREE.TextureLoader().load(
-            opts.normalUrl,
-            (t) => {
-                t.wrapS = t.wrapT = THREE.RepeatWrapping;
-            }
-        );
+        if (opts.normalUrl) {
+            this.waterNormalTexture = new THREE.TextureLoader().load(
+                opts.normalUrl,
+                (t) => {
+                    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+                }
+            );
+        }
         this.waterMaterial = new WaterReflectionMaterial(null, this.waterNormalTexture);
         if (opts.sun) {
             this.setSun(opts.sun);
         }
-        this.waterMaterial.opacity = 1.0; 
+        if (opts.settings) {
+            this.waterMaterial.applySettings(opts.settings);
+        }
         this.minZoom = opts.minZoom ?? 16;
         this.maxZoom = opts.maxZoom ?? 20;
     }
@@ -100,6 +106,10 @@ export class WaterLayer implements Custom3DTileRenderLayer, PrerenderGeometryLay
         this.map = null;
     }
 
+    setVisible(visible: boolean): void {
+        this.visible = visible;
+    }
+
     setVectorSource(source: CustomVectorSource): void {
         this.vectorSource = source;
     }
@@ -108,7 +118,12 @@ export class WaterLayer implements Custom3DTileRenderLayer, PrerenderGeometryLay
         return `${z}/${x}/${y}`;
     }
 
-    private handleClick = (e: MapMouseEvent) => {
+    setPickEnabled(enabled: boolean): void {
+        this.pickEnabled = enabled;
+    }
+
+    private handleClick = (_e: MapMouseEvent) => {
+        if (!this.pickEnabled) return;
         if(!this.reflectionPass || !this.renderer || !this.map) return;
         const center = this.map.getCenter();
         console.log('Water click:', {
@@ -306,5 +321,13 @@ export class WaterLayer implements Custom3DTileRenderLayer, PrerenderGeometryLay
 
     setLayerSourceCastShadow(source: Custom3DTileRenderLayer): void {
         this.layerSourceCastShadow = source;
+    }
+
+    applyWaterSettings(settings: Partial<WaterSettings>): void {
+        this.waterMaterial?.applySettings(settings);
+    }
+
+    getWaterSettings(): WaterSettings | null {
+        return this.waterMaterial?.getSettings() ?? null;
     }
 }

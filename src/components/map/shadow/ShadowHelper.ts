@@ -1,5 +1,4 @@
 import * as THREE from 'three';
-// @ts-ignore
 import * as SunCalc from 'suncalc';
 
 export function createSunLightArrow(dir: THREE.Vector3, scaleUnit: number): THREE.ArrowHelper {
@@ -34,8 +33,8 @@ export function calculateSunDirectionMaplibre(altitude: number /*radian*/, azimu
     return dir.normalize();
 }
 
-export function getSunPosition(lat: number, lon: number) {
-    const now = new Date();
+export function getSunPosition(lat: number, lon: number, date: Date = new Date()) {
+    const now = date;
     const sunPos = SunCalc.getPosition(now, lat, lon);
 
     // Ban đêm (mặt trời dưới đường chân trời) → dùng vị trí mặt trăng

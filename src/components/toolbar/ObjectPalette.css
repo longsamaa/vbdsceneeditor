@@ -1,0 +1,138 @@
+.obj-palette {
+    width: 100%;
+    box-sizing: border-box;
+    background: rgba(50, 55, 65, 0.95);
+    border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+    padding: 10px;
+    font-family: system-ui, sans-serif;
+    color: #ccc;
+    max-height: 300px;
+    overflow-y: auto;
+    margin-top: 6px;
+}
+
+.obj-palette::-webkit-scrollbar {
+    width: 5px;
+}
+.obj-palette::-webkit-scrollbar-thumb {
+    background: rgba(255,255,255,0.2);
+    border-radius: 3px;
+}
+
+.obj-palette-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.obj-palette-tabs {
+    display: flex;
+    gap: 2px;
+}
+
+.obj-palette-tab {
+    background: transparent;
+    border: none;
+    color: #999;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 4px 10px;
+    border-radius: 4px;
+    transition: color 0.15s, background 0.15s;
+}
+.obj-palette-tab:hover {
+    color: #ddd;
+    background: rgba(255,255,255,0.06);
+}
+.obj-palette-tab.active {
+    color: #fff;
+    background: rgba(74, 144, 217, 0.3);
+}
+
+.obj-palette-close {
+    background: transparent;
+    border: none;
+    color: #aaa;
+    cursor: pointer;
+    padding: 2px;
+}
+.obj-palette-close:hover {
+    color: #fff;
+}
+
+.obj-palette-category {
+    font-size: 12px;
+    font-weight: 600;
+    color: #ddd;
+    margin: 8px 0 4px 2px;
+    font-style: italic;
+}
+
+.obj-palette-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+    margin-bottom: 4px;
+}
+
+.obj-palette-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 8px 4px;
+    background: rgba(60, 65, 75, 0.9);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+}
+
+.obj-palette-item:hover {
+    background: rgba(80, 90, 110, 0.9);
+    border-color: rgba(100, 160, 255, 0.4);
+}
+
+.obj-palette-item:active {
+    background: rgba(66, 133, 244, 0.3);
+}
+
+.obj-palette-icon {
+    width: 48px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.obj-palette-icon svg {
+    width: 40px;
+    height: 40px;
+}
+
+.obj-palette-label {
+    font-size: 10px;
+    color: #bbb;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+}
+
+.obj-palette-item.selected {
+    border-color: #4a90d9;
+    background: rgba(66, 133, 244, 0.2);
+}
+
+.obj-palette-tex-thumb {
+    width: 48px;
+    height: 48px;
+    border-radius: 4px;
+    background-size: cover;
+    background-position: center;
+    background-color: rgba(255, 255, 255, 0.06);
+}

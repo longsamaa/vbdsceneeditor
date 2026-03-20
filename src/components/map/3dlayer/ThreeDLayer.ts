@@ -5,7 +5,6 @@ import type {
     Custom3DTileRenderLayer,
     DataTileInfo,
     LatLon,
-    LightGroup,
     LightGroupOption,
     ModelData,
     ObjectInfo,
@@ -22,15 +21,14 @@ import {
     tileLocalToLatLon,
 } from '../convert/map_convert.ts';
 import {parseLayerTileInfo} from '../tile/tile.ts';
-import {createBuildingGroup, createLightGroup, createShadowGroup, transformModel, applyShadowLitMaterial} from '../model/objModel.ts'
+import {createBuildingGroup, createShadowGroup, transformModel, applyShadowLitMaterial} from '../model/objModel.ts'
 import {MaplibreShadowMesh} from "../shadow/ShadowGeometry.ts";
 import {CustomVectorSource} from "../source/CustomVectorSource.ts"
 import {ModelFetch} from "./ModelFetch.ts";
-import type {ShadowLitMaterial} from "../shadow/ShadowLitMaterial.ts";
+import {ShadowLitMaterial} from "../shadow/ShadowLitMaterial.ts";
 import {ShadowMapPass,getSharedShadowPass} from "../shadow/ShadowMapPass.ts";
 import { getSharedReflectionPass, ReflectionPass } from '../water/ReflectionPass.ts';
 import {getSharedRenderer} from "../SharedRenderer.ts";
-import { clone } from '@turf/turf';
 
 /** Config cho layer */
 export type Map4DModelsLayerOptions = {
@@ -78,12 +76,12 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer,
     visible = true;
     onPick?: (info: PickHit) => void;
     onPickfail?: () => void;
+    pickEnabled: boolean = true;
     layerSourceCastShadow: Custom3DTileRenderLayer | null = null;
     sourceLayer: string;
     private modelFetcher!: ModelFetch;
     readonly type = 'custom' as const;
     readonly renderingMode = '3d' as const;
-    private light: LightGroup | null = null;
     private map: maplibregl.Map | null = null;
     private renderer: THREE.WebGLRenderer | null = null;
     private camera: THREE.Camera | null = null;
@@ -117,7 +115,6 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer,
         this.maxZoom = opts.maxZoom ?? 19;
         this.tileSize = opts.tileSize ?? 512;
         this.applyGlobeMatrix = opts.applyGlobeMatrix ?? true;
-        this.light = createLightGroup(new THREE.Vector3(0.5, 0.5, 0.5).normalize());
         this.modelCache = new LRUCache<string, ModelCacheEntry>({
             max: opts.maxModelCache ?? 1024,
             dispose: (model) => {
@@ -144,7 +141,7 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer,
         this.map?.triggerRepaint?.();
     }
 
-    prerender(gl, args: CustomRenderMethodInput): void {
+    prerender(_gl: WebGLRenderingContext, _args: CustomRenderMethodInput): void {
         if (!this.map || !this.vectorSource) {
             return;
         }
@@ -234,9 +231,10 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer,
         });
     }
 
-    onAdd(map: Map, gl: WebGLRenderingContext): void {
+    onAdd(map: maplibregl.Map, gl: WebGLRenderingContext): void {
         this.map = map;
         this.camera = new THREE.Camera();
+        this.camera.matrixAutoUpdate = false; 
         this.renderer = getSharedRenderer(map.getCanvas(), gl);
         if(!this.shadowMapPass){
             this.shadowMapPass = getSharedShadowPass(8192); 
@@ -250,34 +248,30 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer,
     }
 
     setLightOption(option: LightGroupOption) {
-        if (!this.light) return;
-        const {directional, hemisphere, ambient} = option;
-        if (directional) {
-            const l = this.light.dirLight;
-            if (directional.intensity !== undefined)
-                l.intensity = directional.intensity;
-            if (directional.color !== undefined)
-                l.color.set(directional.color);
-            if (directional.direction !== undefined)
-                l.target.position.copy(
-                    directional.direction.clone().multiplyScalar(10000)
-                );
-        }
-        if (hemisphere) {
-            const l = this.light.hemiLight;
-            if (hemisphere.intensity !== undefined)
-                l.intensity = hemisphere.intensity;
-            if (hemisphere.skyColor !== undefined)
-                l.color.set(hemisphere.skyColor);
-            if (hemisphere.groundColor !== undefined)
-                l.groundColor.set(hemisphere.groundColor);
-        }
-        if (ambient) {
-            const l = this.light.ambientLight;
-            if (ambient.intensity !== undefined)
-                l.intensity = ambient.intensity;
-            if (ambient.color !== undefined)
-                l.color.set(ambient.color);
+        const { directional, hemisphere, ambient } = option;
+        for (const [, tile] of this.tileCache) {
+            for (const mat of tile.shadowLitMaterials) {
+                if (directional) {
+                    if (directional.intensity !== undefined)
+                        mat.uniforms.diffuseIntensity.value = directional.intensity;
+                    if (directional.color !== undefined)
+                        mat.setLightColor(new THREE.Color(directional.color));
+                }
+                if (hemisphere) {
+                    if (hemisphere.skyColor !== undefined)
+                        mat.setSkyColor(new THREE.Color(hemisphere.skyColor));
+                    if (hemisphere.groundColor !== undefined)
+                        mat.setGroundColor(new THREE.Color(hemisphere.groundColor));
+                    if (hemisphere.intensity !== undefined)
+                        mat.setLighting(hemisphere.intensity, mat.uniforms.diffuseIntensity.value);
+                }
+                if (ambient) {
+                    if (ambient.intensity !== undefined)
+                        mat.setLighting(ambient.intensity, mat.uniforms.diffuseIntensity.value);
+                    if (ambient.color !== undefined)
+                        mat.setLightColor(new THREE.Color(ambient.color));
+                }
+            }
         }
     }
 
@@ -414,8 +408,8 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer,
 
     
 
-    render(gl,args: CustomRenderMethodInput): void {
-        if (!this.map || !this.camera || !this.renderer || !this.visible || !this.vectorSource || !this.light) {
+    render(_gl: WebGLRenderingContext, _args: CustomRenderMethodInput): void {
+        if (!this.map || !this.camera || !this.renderer || !this.visible || !this.vectorSource) {
             return;
         }
         if (this.map.getZoom() < this.minZoom) return;
@@ -443,7 +437,12 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer,
     }
 
     /** --------- Picking --------- */
+    setPickEnabled(enabled: boolean): void {
+        this.pickEnabled = enabled;
+    }
+
     private handleClick = (e: MapMouseEvent) => {
+        if (!this.pickEnabled) return;
         if (!this.map || !this.camera || !this.renderer || !this.visible) {
             return;
         }
@@ -710,9 +709,8 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer,
             }
             cloneObj3d.traverse((child) => {
                 if (child instanceof THREE.Mesh) {
-                    const shadowLitMat = applyShadowLitMaterial(child);
-                    tile.shadowLitMaterials.push(shadowLitMat);
-                    // Skip shadow cho model dẹt (z height quá nhỏ)
+                    const shadowLitMats = applyShadowLitMaterial(child);
+                    tile.shadowLitMaterials.push(...shadowLitMats);
                     const object_shadow = new MaplibreShadowMesh(child);
                     object_shadow.userData = {
                         scale_unit: scaleUnit,

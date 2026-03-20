@@ -12,7 +12,7 @@ import type {TransformMode} from '../toolbar/TransformToolbar'
 import {loadModelFromGlb, decomposeObject, parseUrl} from './model/objModel.ts'
 import {EditLayer} from "./edit/EditLayer.ts";
 import {latlonToLocal} from "./convert/map_convert.ts";
-import type {Custom3DTileRenderLayer} from "./Interface.ts";
+import type {Custom3DTileRenderLayer, UserData} from "./Interface.ts";
 import {CustomEditLayerManager} from "./CustomEditLayerManager.ts"
 import {WaterLayer} from "./water/WaterLayer.ts"
 import {CustomVectorSource} from "./source/CustomVectorSource.ts"
@@ -23,8 +23,11 @@ import {deleteModelFromDb, saveModelToDb} from "./api/modelApi.ts"
 import {getSharedShadowPass} from "./shadow/ShadowMapPass.ts"
 import {getSunPosition} from "./shadow/ShadowHelper.ts"
 import {ObjectTreePanel, type TileNode} from "../toolbar/ObjectTreePanel.tsx"
+import {ObjectPalette, type PrimitiveType} from "../toolbar/ObjectPalette.tsx"
 import {PropertiesPanel, type ObjectProperties} from "../toolbar/PropertiesPanel.tsx"
 import {GraphicsSettings, type GraphicsConfig} from "../toolbar/GraphicsSettings.tsx"
+import { BatchedModelSource } from './source/BatchedModelSource.ts';
+import { ThreeDTileLayer } from './3dlayer/ThreeDTileLayer.ts';
 
 const Editor = lazy(() => import('../nodeeditor/Editor'));
 
@@ -133,18 +136,6 @@ function addEditorLayerToMap(
         map.addLayer(new_editor_layer);
     }
 
-    // Default add Crane3d.glb
-    const defaultGlbUrl = ' ';
-    loadModelFromGlb(defaultGlbUrl)
-        .then((modeldata) => {
-            const fileName = parseUrl(defaultGlbUrl).fileName;
-            new_editor_layer.addObjectsToCache([{ url: defaultGlbUrl, modeldata }]);
-            const center = map.getCenter();
-            new_editor_layer.addObjectToScene(fileName, center.lat, center.lng, 10);
-            map.triggerRepaint();
-        })
-        .catch((e) => console.error('Load default GLB failed:', e));
-
     return new_editor_layer;
 }
 
@@ -209,21 +200,11 @@ function createDefaultMap(map: maplibregl.Map, overlay_layer: OverlayLayer, outl
     });
 
     const map4d_layer = new Map4DModelsThreeLayer({
-        id: 'test_layer',
+        id: 'vector_tile_3d',
         sourceLayer: 'map4d_3dmodels',
         rootUrl: ROOT_MODEL_URL,
         minZoom: 14,
         maxZoom: 19,
-        // onPick: (info) => {
-        //     overlay_layer.setCurrentTileID(info.overScaledTileId);
-        //     overlay_layer.attachGizmoToObject(info.object);
-        //     outline_layer.setCurrentTileID(info.overScaledTileId);
-        //     outline_layer.attachObject(info.object);
-        // },
-        // onPickfail: () => {
-        //     overlay_layer.unselect();
-        //     outline_layer.unselect();
-        // }
     });
     map4d_layer.setVectorSource(map4dSource);
 
@@ -251,16 +232,18 @@ function createDefaultMap(map: maplibregl.Map, overlay_layer: OverlayLayer, outl
     const instanceCustomSource = new CustomVectorSource({
         id: 'test-custom-source',
         url: 'http://10.222.3.81:8083/VietbandoMapService/api/image/?Function=GetVectorTile&MapName=IndoorNavigation&Level={z}&TileX={x}&TileY={y}&UseTileCache=true',
-        minZoom: 0,
-        maxZoom: 16,
+        minZoom: 9,
+        maxZoom: 18,
         tileSize: 512,
         maxTileCache: 1024,
         map,
     });
     const instance_layer = new InstanceLayer({
-        id: 'example_tree',
+        id: 'instance_layer',
         sourceLayer: 'trees',
         applyGlobeMatrix: false,
+        minZoom : 14,
+        maxZoom : 22,
         objectUrl: [
             '/test_data/test_instance/tree2.glb',
             '/test_data/test_instance/tree3.glb',
@@ -300,26 +283,48 @@ function createDefaultMap(map: maplibregl.Map, overlay_layer: OverlayLayer, outl
             .catch((e) => console.error('Load GLB failed:', path, e));
     }
 
-    map4d_layer.setLayerSourceCastShadow(edit_layer);
+    const batched_source = new BatchedModelSource({
+        id : 'test-batched-source',
+        url : 'http://10.225.0.242:8080/{z}_{x}_{y}.glb', 
+        minZoom : 16, 
+        maxZoom : 16,
+        tileSize : 512, 
+        maxTileCache : 1024, 
+        map : map
+    }); 
 
+    const batched_layer = new ThreeDTileLayer({
+        id : 'batched_model_layer', 
+        applyGlobeMatrix : false,
+        minZoom : 15, 
+        maxZoom : 22
+    }); 
+
+    batched_layer.setBatchedSource(batched_source); 
+    batched_layer.setLayerSourceCastShadow(edit_layer); 
+    map.addLayer(batched_layer); 
+    batched_layer.useOrchestrator = true; 
+    map4d_layer.setLayerSourceCastShadow(edit_layer);
     // Register all shadow casters
     shadowOrchestrator.register(edit_layer);
     shadowOrchestrator.register(map4d_layer);
     shadowOrchestrator.register(instance_layer);
+    shadowOrchestrator.register(batched_layer); 
 
     // Register layers in layer manager for panel display
     layerManager.addNewLayer(map4d_layer.id, map4d_layer);
     layerManager.addNewLayer(instance_layer.id, instance_layer);
     layerManager.addNewLayer(edit_layer.id, edit_layer);
-
+    layerManager.addNewLayer(batched_layer.id,batched_layer); 
 
     //reflection orchestrator render add vao cuoi cung 
-
-    ReflectionOrchestrator
     const reflectionOrchestrator = new ReflectionOrchestrator('reflection-orchestrator');
     map.addLayer(reflectionOrchestrator); 
+
     reflectionOrchestrator.register(map4d_layer); 
     reflectionOrchestrator.register(instance_layer); 
+   // reflectionOrchestrator.register(batched_layer); 
+
     const waterLayer = new WaterLayer({
         id: 'test_water_layer',
         applyGlobeMatrix: false,
@@ -372,6 +377,7 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(({
     const [activeLayerIsDb, setActiveLayerIsDb] = useState(false);
     const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
     const [showNodeEditor, setShowNodeEditor] = useState(false);
+    const [showPalette, setShowPalette] = useState(false);
     const pickedObject = useRef<THREE.Object3D | null>(null);
 
     useEffect(() => {
@@ -382,15 +388,15 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(({
             container: mapContainer.current,
             style: 'style/vbd_style.json',
             center,
-            zoom: 17.168970383915713,
-            pitch: 60,
+            zoom: 16.73229201555873,
+            pitch: 0,
             maxPitch: 60,
-            bearing: 45.89774269853467,
+            bearing: 0,
             pixelRatio: Math.min(window.devicePixelRatio, 2),
             maxZoom: 22,
             canvasContextAttributes: HIGH_PERFORMANCE_RENDER ? { antialias: true } : {}
         });
-        //map.current._showTileBoundaries = true;
+        map.current._showTileBoundaries = true;
         addControlMaplibre(map.current);
 
         overlay_layer.current = createOverLayer();
@@ -491,8 +497,10 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(({
         // Update object tree panel
         if (isEdit && layer instanceof EditLayer) {
             setTreeData({ layerId: id, tiles: layer.getTileObjectTree() });
+            setShowPalette(true);
         } else {
             setTreeData(null);
+            setShowPalette(false);
         }
         map.current?.triggerRepaint();
     }, []);
@@ -520,6 +528,16 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(({
         const layer = editorLayerManager.current?.layer_cache.get(layerId);
         addObjectToEditLayerFromUrl(map.current, layer, url);
         setTimeout(() => refreshTreeData(layerId), 1000);
+    }, []);
+
+    const handleAddPrimitive = useCallback((type: PrimitiveType) => {
+        const mgr = editorLayerManager.current;
+        if (!mgr || !map.current) return;
+        const layer = mgr.current_layer;
+        if (!layer || !(layer instanceof EditLayer)) return;
+        const center = map.current.getCenter();
+        layer.addPrimitiveToScene(type, center.lat, center.lng);
+        setTimeout(() => refreshTreeData(layer.id), 500);
     }, []);
 
     const handleDeleteLayer = useCallback((id: string) => {
@@ -557,24 +575,72 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(({
                 onDeleteLayer={handleDeleteLayer}
             />
             {treeData && (
-                <ObjectTreePanel
-                    layerId={treeData.layerId}
-                    tiles={treeData.tiles}
-                    onClose={() => setTreeData(null)}
-                    onSelectObject={(tileKey, objectIndex) => {
-                        const layer = editorLayerManager.current?.layer_cache.get(treeData.layerId);
-                        if (!layer || !(layer instanceof EditLayer)) return;
-                        const obj = layer.getObjectByTileKeyAndIndex(tileKey, objectIndex);
-                        const tileId = layer.getOverscaledTileID(tileKey);
-                        if (obj && tileId) {
-                            overlay_layer.current?.setCurrentTileID(tileId);
-                            overlay_layer.current?.attachGizmoToObject(obj);
-                            outline_layer.current?.setCurrentTileID(tileId);
-                            outline_layer.current?.attachObject(obj);
-                            map.current?.triggerRepaint();
-                        }
-                    }}
-                />
+                <div style={{ position: 'absolute', left: 10, top: 150, zIndex: 2000, width: 240 }}>
+                    <ObjectTreePanel
+                        layerId={treeData.layerId}
+                        tiles={treeData.tiles}
+                        onClose={() => { setTreeData(null); setShowPalette(false); }}
+                        onSelectObject={(tileKey, objectIndex) => {
+                            const layer = editorLayerManager.current?.layer_cache.get(treeData.layerId);
+                            if (!layer || !(layer instanceof EditLayer)) return;
+                            const obj = layer.getObjectByTileKeyAndIndex(tileKey, objectIndex);
+                            const tileId = layer.getOverscaledTileID(tileKey);
+                            if (obj && tileId) {
+                                overlay_layer.current?.setCurrentTileID(tileId);
+                                overlay_layer.current?.attachGizmoToObject(obj);
+                                outline_layer.current?.setCurrentTileID(tileId);
+                                outline_layer.current?.attachObject(obj);
+                                map.current?.triggerRepaint();
+                            }
+                        }}
+                        onExportTile={(tileKey) => {
+                            const layer = editorLayerManager.current?.layer_cache.get(treeData.layerId);
+                            if (!layer || !(layer instanceof EditLayer)) return;
+                            layer.export3DTile(tileKey);
+                        }}
+                    />
+                    {showPalette && (
+                        <ObjectPalette
+                            onSelect={handleAddPrimitive}
+                            onClose={() => setShowPalette(false)}
+                            showTextureTab={selectedProps?.modeltype === 'primitive'}
+                            onSelectTexture={(slot, textureName, textureUrl) => {
+                                const layer = editorLayerManager.current?.current_layer;
+                                const obj = pickedObject.current;
+                                console.log('texture select', slot, textureName, textureUrl);
+                                console.log('current layer:', layer);
+                                console.log('picked object:', obj?.userData);
+                                if(!layer || !(layer instanceof EditLayer)) return; 
+                                layer.bindTextureToObject(slot,pickedObject.current?.userData as UserData,textureUrl)
+                            }}
+                        />
+                    )}
+                    <button
+                        onClick={() => setShowNodeEditor(true)}
+                        title="Node Editor"
+                        style={{
+                            marginTop: 6,
+                            background: '#4a90d9',
+                            color: '#fff',
+                            border: 'none',
+                            borderRadius: 8,
+                            width: 40,
+                            height: 40,
+                            padding: 0,
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+                        }}
+                    >
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <rect x="2" y="3" width="7" height="7" rx="1.5" />
+                            <rect x="15" y="14" width="7" height="7" rx="1.5" />
+                            <path d="M9 6.5h3a2 2 0 0 1 2 2v7a2 2 0 0 0 2 2h-1" />
+                        </svg>
+                    </button>
+                </div>
             )}
             {selectedProps && (
                 <PropertiesPanel
@@ -664,6 +730,7 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(({
                     }}
                 />
             )}
+
             <GraphicsSettings onChange={handleGraphicsChange} onToggleBoundaries={handleToggleBoundaries} />
             {toast && (
                 <div
@@ -679,34 +746,6 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(({
                     {toast.msg}
                 </div>
             )}
-            <button
-                onClick={() => setShowNodeEditor(true)}
-                title="Node Editor"
-                style={{
-                    position: 'fixed',
-                    top: 400,
-                    left: 10,
-                    zIndex: 10000,
-                    background: '#4a90d9',
-                    color: '#fff',
-                    border: 'none',
-                    borderRadius: 8,
-                    width: 40,
-                    height: 40,
-                    padding: 0,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
-                }}
-            >
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="2" y="3" width="7" height="7" rx="1.5" />
-                    <rect x="15" y="14" width="7" height="7" rx="1.5" />
-                    <path d="M9 6.5h3a2 2 0 0 1 2 2v7a2 2 0 0 0 2 2h-1" />
-                </svg>
-            </button>
             {showNodeEditor && (
                 <Suspense fallback={<div style={{position:'fixed',inset:0,zIndex:9999,background:'#1e1e1e',color:'#fff',display:'flex',alignItems:'center',justifyContent:'center'}}>Loading...</div>}>
                     <Editor onClose={() => setShowNodeEditor(false)} map={map.current} />

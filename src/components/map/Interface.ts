@@ -91,6 +91,7 @@ export type UserData = {
 }
 export type ShadowUserData = {
     scale_unit : number
+    ownerId?: string | null,
 }
 
 export type LightGroupOption = {

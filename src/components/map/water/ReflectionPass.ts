@@ -41,8 +41,9 @@ export class ReflectionPass {
             //cal tile matrix refleciton here
             const key = tileKey(tile);
             const tileData = getSceneAndShadowLitMats(key);
-            if(tileData?.shadowLitMats){
-                for (const mat of tileData?.shadowLitMats) {
+            const shadowLitMats = tileData?.shadowLitMats;
+            if(shadowLitMats){
+                for (const mat of shadowLitMats) {
                     mat.enableShadowMap(false); 
                 }
             }
@@ -54,9 +55,9 @@ export class ReflectionPass {
             this.tmpMatrix = this.tmpMatrix.fromArray(projectionData.mainMatrix); 
             this.finalMatrix.multiplyMatrices(this.tmpMatrix,this.reflectionMatrix);
             this.camera.projectionMatrix = this.finalMatrix;
-            renderer.render(tileData.scene,this.camera); 
-            if(tileData?.shadowLitMats){
-                for (const mat of tileData?.shadowLitMats) {
+            renderer.render(tileData.scene,this.camera);
+            if(shadowLitMats){
+                for (const mat of shadowLitMats) {
                     mat.enableShadowMap(false); 
                 }
             }

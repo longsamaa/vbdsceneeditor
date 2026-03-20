@@ -1,4 +1,20 @@
-import type {ObjectProperties} from '../../toolbar/PropertiesPanel.tsx';
+type ObjectProperties = {
+    longitude?: number | null;
+    latitude?: number | null;
+    name?: string | null;
+    scale?: number | null;
+    bearing?: number | null;
+    elevation?: number | null;
+    startdate?: string | null;
+    enddate?: string | null;
+    modeltype?: string | null;
+    modelname?: string | null;
+    modelurl?: string | null;
+    texturename?: string | null;
+    textureurl?: string | null;
+    coordinates?: unknown;
+    height?: number | null;
+};
 
 const MODEL_API_URL = import.meta.env.VITE_MODEL_API_URL as string;
 

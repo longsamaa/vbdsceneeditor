@@ -110,7 +110,7 @@ export const PropertiesPanel = ({properties, editable, showDbActions, onClose, o
                                 {isEditing ? (
                                     <input
                                         className="prop-input"
-                                        type={type === 'number' ? 'number' : 'text'}
+                                        type="text"
                                         value={editValue}
                                         autoFocus
                                         onChange={(e) => setEditValue(e.target.value)}

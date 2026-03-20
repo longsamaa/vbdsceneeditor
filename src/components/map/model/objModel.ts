@@ -149,18 +149,18 @@ export function prepareModelForRender(model: THREE.Object3D, setDefaultMat: bool
 }
 
 export async function loadModelFromGlb(url: string): Promise<ModelData> {
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error(`${resp.status}`);
+    const buffer = await resp.arrayBuffer();
     const loader = new GLTFLoader();
-    try {
-        const gltf = await loader.loadAsync(url);
-        const obj = gltf.scene as THREE.Object3D;
-        return {
-            object3d: obj,
-            animations: gltf.animations
-        };
-    } catch (err) {
-        console.error(`[loadModelFromGlb] failed to load`, url, err);
-        throw err;
-    }
+    const gltf = await new Promise<any>((resolve, reject) => {
+        loader.parse(buffer, '', resolve, reject);
+    });
+    const obj = gltf.scene as THREE.Object3D;
+    return {
+        object3d: obj,
+        animations: gltf.animations
+    };
 }
 
 //load model for instancing layer
@@ -289,14 +289,14 @@ export function transformModel(posX: number,
  * Replace mesh material with ShadowLitMaterial, extracting all relevant properties
  * from the original material (color, map, alphaMap, alphaTest, opacity, vertexColors, side).
  */
-export function applyShadowLitMaterial(mesh: THREE.Mesh): ShadowLitMaterial {
-    const origMat = mesh.material as THREE.MeshStandardMaterial;
+function convertOneMaterial(origMat: THREE.MeshStandardMaterial, geometry: THREE.BufferGeometry): ShadowLitMaterial {
     const shadowMat = new ShadowLitMaterial();
 
     if (!origMat) {
-        mesh.material = shadowMat;
         return shadowMat;
     }
+
+    shadowMat.name = origMat.name;
 
     // base color
     if (origMat.color) {
@@ -334,15 +334,32 @@ export function applyShadowLitMaterial(mesh: THREE.Mesh): ShadowLitMaterial {
 
     // side
     shadowMat.side = THREE.DoubleSide;
-
+    shadowMat.name = origMat.name; 
     // vertex colors
-    if (origMat.vertexColors && mesh.geometry.hasAttribute('color')) {
+    if (origMat.vertexColors && geometry.hasAttribute('color')) {
         shadowMat.defines = { ...shadowMat.defines, USE_VERTEX_COLOR: '' };
         shadowMat.needsUpdate = true;
     }
 
-    mesh.material = shadowMat;
     return shadowMat;
+}
+
+export function applyShadowLitMaterial(mesh: THREE.Mesh): ShadowLitMaterial[] {
+    if (Array.isArray(mesh.material)) {
+        const origin_mat : THREE.Material[] = mesh.material; 
+        const shadowMats = mesh.material.map((mat) =>
+            convertOneMaterial(mat as THREE.MeshStandardMaterial, mesh.geometry)
+        );
+        mesh.material = shadowMats;
+        mesh.userData._originMat = origin_mat; 
+        return shadowMats;
+    }
+    const origin_mat : THREE.Material = mesh.material; 
+    const shadowMat = convertOneMaterial(mesh.material as THREE.MeshStandardMaterial, mesh.geometry);
+    mesh.material = shadowMat;
+    mesh.userData._originMat = origin_mat;
+    mesh.material.name = origin_mat.name;  
+    return [shadowMat];
 }
 
 export function isGlbModel(modelUrl: string): boolean {

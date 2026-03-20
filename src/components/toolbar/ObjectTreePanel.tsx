@@ -1,5 +1,5 @@
 import {useState} from 'react';
-import {ChevronDown, Box, X} from 'lucide-react';
+import {ChevronDown, Box, X, Download} from 'lucide-react';
 import './ObjectTreePanel.css';
 
 export interface TileNode {
@@ -12,9 +12,10 @@ interface Props {
     tiles: TileNode[];
     onClose: () => void;
     onSelectObject?: (tileKey: string, objectIndex: number) => void;
+    onExportTile?: (tileKey: string) => void;
 }
 
-export const ObjectTreePanel = ({layerId, tiles, onClose, onSelectObject}: Props) => {
+export const ObjectTreePanel = ({layerId, tiles, onClose, onSelectObject, onExportTile}: Props) => {
     const [collapsedTiles, setCollapsedTiles] = useState<Set<string>>(new Set());
     const [selectedObj, setSelectedObj] = useState<string | null>(null);
 
@@ -52,6 +53,18 @@ export const ObjectTreePanel = ({layerId, tiles, onClose, onSelectObject}: Props
                                 >
                                     <ChevronDown size={14} strokeWidth={2}/>
                                     <span>Tile {tile.tileKey}</span>
+                                    {onExportTile && (
+                                        <button
+                                            className="otp-export-btn"
+                                            title="Export 3D tile"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                onExportTile(tile.tileKey);
+                                            }}
+                                        >
+                                            <Download size={12} strokeWidth={2}/>
+                                        </button>
+                                    )}
                                     <span className="otp-tile-count">{tile.objects.length}</span>
                                 </div>
                                 {!isCollapsed && tile.objects.map((obj, idx) => {

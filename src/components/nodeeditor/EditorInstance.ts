@@ -5,10 +5,12 @@ import { ConnectionPlugin, Presets as ConnectionPresets } from 'rete-connection-
 import { ReactPlugin, Presets as ReactPresets } from 'rete-react-plugin';
 import { DataflowEngine } from 'rete-engine';
 import { createRoot } from 'react-dom/client';
-import { NODE_LIST } from './NodeFactory';
+import { NODE_LIST, type NodeFactory } from './NodeFactory';
 import type maplibregl from 'maplibre-gl';
 import { LabeledControl } from './plugins/LabeledControl';
 import { LabeledControlComponent } from './plugins/LabeledControlComponent';
+import { SliderControl } from './plugins/SliderControl';
+import { SliderControlComponent } from './plugins/SliderControlComponent';
 
 // --- Graph serialization ---
 
@@ -47,6 +49,10 @@ export class EditorInstance {
         this._map = map;
     }
 
+    getNodeList(): NodeFactory[] {
+        return NODE_LIST;
+    }
+
     async init(container: HTMLElement) {
         this.area = new AreaPlugin<any, any>(container);
         const connection = new ConnectionPlugin<any, any>();
@@ -55,6 +61,9 @@ export class EditorInstance {
         reactPlugin.addPreset(ReactPresets.classic.setup({
             customize: {
                 control(data) {
+                    if (data.payload instanceof SliderControl) {
+                        return () => React.createElement(SliderControlComponent, { data: data.payload as SliderControl });
+                    }
                     if (data.payload instanceof LabeledControl) {
                         return () => React.createElement(LabeledControlComponent, { data: data.payload as LabeledControl });
                     }
@@ -136,6 +145,17 @@ export class EditorInstance {
         AreaExtensions.zoomAt(this.area, this.editor.getNodes());
     }
 
+    async addNode(factory: NodeFactory, x: number, y: number) {
+        const node = factory.create(this);
+        await this.editor.addNode(node);
+        await this.area.translate(node.id, { x, y });
+    }
+
+    async addNodeAtPointer(factory: NodeFactory) {
+        const { x, y } = this.area.area.pointer;
+        await this.addNode(factory, x, y);
+    }
+
     exportGraph(): SerializedGraph {
         const nodes = this.editor.getNodes().map((n: any) => {
             const view = this.area.nodeViews.get(n.id);
@@ -149,6 +169,10 @@ export class EditorInstance {
             targetInput: c.targetInput,
         }));
         return { nodes, connections };
+    }
+
+    exportGraphJSON(): string {
+        return JSON.stringify(this.exportGraph(), null, 2);
     }
 
     async loadGraph(graph: SerializedGraph) {
@@ -180,6 +204,11 @@ export class EditorInstance {
         }
     }
 
+    async loadGraphJSON(json: string) {
+        const graph: SerializedGraph = JSON.parse(json);
+        await this.loadGraph(graph);
+    }
+
     async execute(): Promise<string[]> {
         const logs: string[] = [];
         this.engine.reset();
@@ -204,6 +233,33 @@ export class EditorInstance {
         }
 
         return logs;
+    }
+
+    downloadGraph(filename = 'graph.json') {
+        const json = this.exportGraphJSON();
+        const blob = new Blob([json], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(url);
+    }
+
+    openLoadDialog(): Promise<void> {
+        return new Promise((resolve) => {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.json';
+            input.onchange = async () => {
+                const file = input.files?.[0];
+                if (!file) { resolve(); return; }
+                const text = await file.text();
+                await this.loadGraphJSON(text);
+                resolve();
+            };
+            input.click();
+        });
     }
 
     destroy() {

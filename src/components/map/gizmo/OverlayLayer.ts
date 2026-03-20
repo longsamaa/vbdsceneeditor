@@ -82,14 +82,15 @@ export class OverlayLayer implements CustomLayerInterface {
         const bearing = decompose.bearing;
         const tileCoord = decompose.tileCoord;
         const height = decompose.height;
+        const formatCoord = (value?: number) => typeof value === "number" ? value.toFixed(6) : "";
         this.hoverDiv.innerText =
             `Name: ${object.name}
             Id : ${object.id}
-            Lat : ${decompose.latlon?.lat}
-            Lon : ${decompose.latlon?.lon}
+            Lat : ${formatCoord(decompose.latlon?.lat)}
+            Lon : ${formatCoord(decompose.latlon?.lon)}
             Tile Coord : ${tileCoord?.x},${tileCoord?.y}
             Elevation : ${decompose.elevation}
-            Scale : ${scale?.scaleX},${scale?.scaleY},${scale?.scaleZ}
+            Scale : ${scale}
             Bearing : ${bearing}
             Height : ${height}(m)`;
         this.hoverDiv.style.left = `${screenX}px`;
@@ -147,7 +148,7 @@ export class OverlayLayer implements CustomLayerInterface {
         });
     }
 
-    attachGizmoToObject(object: THREE.Object3D): void {
+    attachGizmoToObject(object: THREE.Object3D, mode?: TransformControlsMode): void {
         if (!this.currentTile || !this.renderer || !this.camera || !this.scene || !this.map) return;
         this.transformControl?.dispose();
         this.footprintMeshes = [];
@@ -170,7 +171,7 @@ export class OverlayLayer implements CustomLayerInterface {
             scale: object.scale.clone(),
             quaternion: object.quaternion.clone()
         }
-        this.setMode(this.current_mode);
+        this.setMode(mode ?? this.current_mode);
         (this.transformControl as unknown as THREE.Object3D).visible = true;
         (this.transformControl as unknown as THREE.Object3D).name = 'TransformControls';
         this.transformControl.setCurrentTile(this.currentTile);
@@ -243,7 +244,7 @@ export class OverlayLayer implements CustomLayerInterface {
         this.scene.traverse((child) => {
             if (child instanceof MaplibreShadowMesh) {
                 const shadow_scale_z = child.userData.scale_unit;
-                (child as MaplibreShadowMesh).update(new THREE.Vector3(dir.x, dir.y, -dir.z / shadow_scale_z));
+                (child as MaplibreShadowMesh).update(dir.x, dir.y, -dir.z / shadow_scale_z);
             }
         });
     }

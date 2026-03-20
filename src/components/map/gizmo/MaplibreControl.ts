@@ -73,7 +73,7 @@ class MaplibreTransformControls extends TransformControls {
         if (!this.map || !this.currentTile) return false;
         const tr: any = (this.map as any).transform;
         if (!tr?.getProjectionData) {
-            false;
+            return false;
         }
         const proj = tr.getProjectionData({
             overscaledTileID: this.currentTile,
@@ -128,7 +128,6 @@ class MaplibreTransformControls extends TransformControls {
 
     pointerDown(pointer: any): void {
         if (this.object === undefined || this.dragging === true || (pointer != null && pointer.button !== 0)) return;
-        let raycaster = null;
         if (this.axis !== null) {
             if (pointer !== null) {
                 const raycaster = this.getRaycaster();
@@ -266,7 +265,6 @@ class MaplibreTransformControls extends TransformControls {
             if (mode === 'rotate') {
                 (this as any)._offset.copy((this as any).pointEnd).sub((this as any).pointStart);
                 const ROTATION_SPEED = 20 / (this as any).worldPosition.distanceTo(this.tempVector.setFromMatrixPosition(this.camera.matrixWorld));
-                let _inPlaneRotation = false;
                 if (axis === 'X' || axis === 'Y' || axis === 'Z') {
                     (this as any).rotationAxis.copy(this.unit[axis]);
                     this.tempVector.copy(this.unit[axis]);
@@ -275,7 +273,7 @@ class MaplibreTransformControls extends TransformControls {
                     }
                     this.tempVector.cross((this as any).eye);
                     if (this.tempVector.length() === 0) {
-                        _inPlaneRotation = true;
+                        // Keep current rotation when the view direction is collinear with the axis.
                     } else {
                         (this as any).rotationAngle = (this as any)._offset.dot(this.tempVector.normalize()) * ROTATION_SPEED;
                     }

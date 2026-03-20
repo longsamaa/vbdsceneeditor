@@ -1,10 +1,9 @@
 import maplibregl, {type CustomRenderMethodInput, MapMouseEvent, OverscaledTileID} from 'maplibre-gl';
-import {bakeWorldAndConvertYupToZup, createLightGroup, loadModelFromGlb, applyShadowLitMaterial} from '../model/objModel.ts';
+import {bakeWorldAndConvertYupToZup, loadModelFromGlb, applyShadowLitMaterial} from '../model/objModel.ts';
 import {clampZoom, getMetersPerExtentUnit, tileLocalToLatLon} from '../convert/map_convert.ts';
 import type {
     Custom3DTileRenderLayer,
     LatLon,
-    LightGroup,
     LightGroupOption,
     PickHit,
     ReflectionCasterLayer,
@@ -19,9 +18,6 @@ import {ShadowLitMaterial} from "../shadow/ShadowLitMaterial.ts"
 import {ShadowMapPass,getSharedShadowPass} from "../shadow/ShadowMapPass.ts";
 import {getSharedRenderer} from "../SharedRenderer.ts";
 import { getSharedReflectionPass, ReflectionPass } from '../water/ReflectionPass.ts';
-import {
-    calculateTileMatrixThree,
-} from "../shadow/ShadowCamera.ts";
 
 export type InstanceLayerOpts = {
     id: string;
@@ -48,6 +44,7 @@ export class InstanceLayer implements Custom3DTileRenderLayer, ShadowCasterLayer
     visible: boolean = true;
     onPick?: (info: PickHit) => void;
     onPickfail?: () => void;
+    pickEnabled: boolean = true;
     layerSourceCastShadow: Custom3DTileRenderLayer | null = null;
     sourceLayer: string;
     readonly type = 'custom' as const;
@@ -62,7 +59,6 @@ export class InstanceLayer implements Custom3DTileRenderLayer, ShadowCasterLayer
     private renderer: THREE.WebGLRenderer | null = null;
     private camera: THREE.Camera | null = null;
     private applyGlobeMatrix: boolean | false = false;
-    private light: LightGroup | null = null;
     private baseMatrix = new THREE.Matrix4();
     private shadowMatrix = new THREE.Matrix4();
     private finalMatrix = new THREE.Matrix4();
@@ -84,7 +80,6 @@ export class InstanceLayer implements Custom3DTileRenderLayer, ShadowCasterLayer
         this.onPickfail = opts.onPickfail;
         this.sourceLayer = opts.sourceLayer;
         this.objectUrls = opts.objectUrl;
-        this.light = createLightGroup(new THREE.Vector3(0.5, 0.5, 0.5).normalize());
         this.shadowMaterial = new THREE.MeshBasicMaterial({
                     color: 0x000000,
                     polygonOffset: true,
@@ -158,38 +153,34 @@ export class InstanceLayer implements Custom3DTileRenderLayer, ShadowCasterLayer
     }
 
     setLightOption(option: LightGroupOption) {
-        if (!this.light) return;
-        const {directional, hemisphere, ambient} = option;
-        if (directional) {
-            const l = this.light.dirLight;
-            if (directional.intensity !== undefined)
-                l.intensity = directional.intensity;
-            if (directional.color !== undefined)
-                l.color.set(directional.color);
-            if (directional.direction !== undefined)
-                l.target.position.copy(
-                    directional.direction.clone().multiplyScalar(10000)
-                );
-        }
-        if (hemisphere) {
-            const l = this.light.hemiLight;
-            if (hemisphere.intensity !== undefined)
-                l.intensity = hemisphere.intensity;
-            if (hemisphere.skyColor !== undefined)
-                l.color.set(hemisphere.skyColor);
-            if (hemisphere.groundColor !== undefined)
-                l.groundColor.set(hemisphere.groundColor);
-        }
-        if (ambient) {
-            const l = this.light.ambientLight;
-            if (ambient.intensity !== undefined)
-                l.intensity = ambient.intensity;
-            if (ambient.color !== undefined)
-                l.color.set(ambient.color);
+        const { directional, hemisphere, ambient } = option;
+        for (const [, tile] of this.tileCache) {
+            for (const mat of tile.shadowLitMaterials) {
+                if (directional) {
+                    if (directional.intensity !== undefined)
+                        mat.uniforms.diffuseIntensity.value = directional.intensity;
+                    if (directional.color !== undefined)
+                        mat.setLightColor(new THREE.Color(directional.color));
+                }
+                if (hemisphere) {
+                    if (hemisphere.skyColor !== undefined)
+                        mat.setSkyColor(new THREE.Color(hemisphere.skyColor));
+                    if (hemisphere.groundColor !== undefined)
+                        mat.setGroundColor(new THREE.Color(hemisphere.groundColor));
+                    if (hemisphere.intensity !== undefined)
+                        mat.setLighting(hemisphere.intensity, mat.uniforms.diffuseIntensity.value);
+                }
+                if (ambient) {
+                    if (ambient.intensity !== undefined)
+                        mat.setLighting(ambient.intensity, mat.uniforms.diffuseIntensity.value);
+                    if (ambient.color !== undefined)
+                        mat.setLightColor(new THREE.Color(ambient.color));
+                }
+            }
         }
     }
 
-    prerender(gl, args: CustomRenderMethodInput): void {
+    prerender(_gl: WebGLRenderingContext, _args: CustomRenderMethodInput): void {
         if (!this.map || !this.vectorSource || !(this.objectUrls.length === this.mapObj3d.size) || this.mapObj3d.size === 0) {
             return;
         }
@@ -307,7 +298,16 @@ export class InstanceLayer implements Custom3DTileRenderLayer, ShadowCasterLayer
         }
     }
 
+    setVisible(visible: boolean): void {
+        this.visible = visible;
+    }
+
+    setPickEnabled(enabled: boolean): void {
+        this.pickEnabled = enabled;
+    }
+
     private handleClick = (e: MapMouseEvent) => {
+        if (!this.pickEnabled) return;
         console.log(e);
     };
 
@@ -442,7 +442,7 @@ export class InstanceLayer implements Custom3DTileRenderLayer, ShadowCasterLayer
     }
 
     mainPass(tr : any, visibleTiles : OverscaledTileID[]){
-        if (!this.map || !this.camera || !this.renderer || !this.visible || !this.vectorSource || !this.light || !this.shadowMapPass) {
+        if (!this.map || !this.camera || !this.renderer || !this.visible || !this.vectorSource || !this.shadowMapPass) {
             return;
         }
         this.renderer.resetState();
@@ -469,7 +469,7 @@ export class InstanceLayer implements Custom3DTileRenderLayer, ShadowCasterLayer
     }
 
     render(): void {
-        if (!this.map || !this.camera || !this.renderer || !this.visible || !this.vectorSource || !this.light) {
+        if (!this.map || !this.camera || !this.renderer || !this.visible || !this.vectorSource) {
             return;
         }
         const tr = this.map.transform;

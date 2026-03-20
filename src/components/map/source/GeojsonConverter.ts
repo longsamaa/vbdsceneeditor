@@ -1,7 +1,7 @@
 import {VectorTile, VectorTileFeature} from '@mapbox/vector-tile';
 import Point from '@mapbox/point-geometry';
 import * as THREE from "three";
-// @ts-ignore
+// @ts-expect-error -- earcut default import typing does not match the runtime package shape here.
 import earcut from 'earcut';
 
 export type JsonVectorTile = {

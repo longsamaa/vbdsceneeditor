@@ -1,9 +1,7 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
-import { NODE_LIST, type NodeFactory } from './NodeFactory';
-import { EditorInstance, type SerializedGraph } from './EditorInstance';
+import { type NodeFactory } from './NodeFactory';
+import { EditorInstance } from './EditorInstance';
 import type maplibregl from 'maplibre-gl';
-
-// --- Component ---
 
 type MenuState = { visible: false } | { visible: true; x: number; y: number };
 
@@ -34,21 +32,13 @@ export default function Editor({ onClose, map }: { onClose: () => void; map: map
         e.preventDefault();
         if (!containerRef.current) return;
         const rect = containerRef.current.getBoundingClientRect();
-        setMenu({
-            visible: true,
-            x: e.clientX - rect.left,
-            y: e.clientY - rect.top,
-        });
+        setMenu({ visible: true, x: e.clientX - rect.left, y: e.clientY - rect.top });
         setSearch('');
     }, []);
 
     const addNode = useCallback(async (factory: NodeFactory) => {
         if (!editorRef.current || !menu.visible) return;
-        const { editor, area } = editorRef.current;
-        const node = factory.create(editorRef.current);
-        await editor.addNode(node);
-        const { x, y } = area.area.pointer;
-        await area.translate(node.id, { x, y });
+        await editorRef.current.addNodeAtPointer(factory);
         setMenu({ visible: false });
     }, [menu]);
 
@@ -56,39 +46,20 @@ export default function Editor({ onClose, map }: { onClose: () => void; map: map
         if (!editorRef.current) return;
         const logs = await editorRef.current.execute();
         setExecLog(logs);
-        console.log('--- Execute Graph (DataflowEngine) ---');
+        console.log('--- Execute Graph ---');
         logs.forEach(l => console.log(l));
     }, []);
 
     const handleExport = useCallback(() => {
-        if (!editorRef.current) return;
-        const graph = editorRef.current.exportGraph();
-        const json = JSON.stringify(graph, null, 2);
-        const blob = new Blob([json], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'graph.json';
-        a.click();
-        URL.revokeObjectURL(url);
+        editorRef.current?.downloadGraph();
     }, []);
 
-    const handleLoad = useCallback(() => {
-        if (!editorRef.current) return;
-        const input = document.createElement('input');
-        input.type = 'file';
-        input.accept = '.json';
-        input.onchange = async () => {
-            const file = input.files?.[0];
-            if (!file || !editorRef.current) return;
-            const text = await file.text();
-            const graph: SerializedGraph = JSON.parse(text);
-            await editorRef.current.loadGraph(graph);
-        };
-        input.click();
+    const handleLoad = useCallback(async () => {
+        await editorRef.current?.openLoadDialog();
     }, []);
 
-    const filtered = NODE_LIST.filter(n =>
+    const nodeList = editorRef.current?.getNodeList() ?? [];
+    const filtered = nodeList.filter(n =>
         n.label.toLowerCase().includes(search.toLowerCase())
     );
 
@@ -125,62 +96,35 @@ export default function Editor({ onClose, map }: { onClose: () => void; map: map
                     <button
                         onClick={handleExport}
                         style={{
-                            background: '#2196f3',
-                            color: '#fff',
-                            border: 'none',
-                            borderRadius: 4,
-                            padding: '3px 12px',
-                            cursor: 'pointer',
-                            fontSize: 12,
-                            fontWeight: 600,
+                            background: '#2196f3', color: '#fff', border: 'none',
+                            borderRadius: 4, padding: '3px 12px', cursor: 'pointer',
+                            fontSize: 12, fontWeight: 600,
                         }}
-                    >
-                        Export
-                    </button>
+                    >Export</button>
                     <button
                         onClick={handleLoad}
                         style={{
-                            background: '#ff9800',
-                            color: '#fff',
-                            border: 'none',
-                            borderRadius: 4,
-                            padding: '3px 12px',
-                            cursor: 'pointer',
-                            fontSize: 12,
-                            fontWeight: 600,
+                            background: '#ff9800', color: '#fff', border: 'none',
+                            borderRadius: 4, padding: '3px 12px', cursor: 'pointer',
+                            fontSize: 12, fontWeight: 600,
                         }}
-                    >
-                        Load
-                    </button>
+                    >Load</button>
                     <button
                         onClick={handleExecute}
                         style={{
-                            background: '#4caf50',
-                            color: '#fff',
-                            border: 'none',
-                            borderRadius: 4,
-                            padding: '3px 12px',
-                            cursor: 'pointer',
-                            fontSize: 12,
-                            fontWeight: 600,
+                            background: '#4caf50', color: '#fff', border: 'none',
+                            borderRadius: 4, padding: '3px 12px', cursor: 'pointer',
+                            fontSize: 12, fontWeight: 600,
                         }}
-                    >
-                        Execute
-                    </button>
+                    >Execute</button>
                     <button
                         onClick={onClose}
                         style={{
-                            background: '#e44',
-                            color: '#fff',
-                            border: 'none',
-                            borderRadius: 4,
-                            padding: '3px 10px',
-                            cursor: 'pointer',
+                            background: '#e44', color: '#fff', border: 'none',
+                            borderRadius: 4, padding: '3px 10px', cursor: 'pointer',
                             fontSize: 12,
                         }}
-                    >
-                        X
-                    </button>
+                    >X</button>
                 </div>
             </div>
             <div
@@ -192,16 +136,9 @@ export default function Editor({ onClose, map }: { onClose: () => void; map: map
                 {menu.visible && (
                     <div
                         style={{
-                            position: 'absolute',
-                            left: menu.x,
-                            top: menu.y,
-                            zIndex: 100,
-                            background: '#2d2d2d',
-                            border: '1px solid #555',
-                            borderRadius: 6,
-                            padding: 4,
-                            minWidth: 160,
-                            boxShadow: '0 4px 16px rgba(0,0,0,0.5)',
+                            position: 'absolute', left: menu.x, top: menu.y, zIndex: 100,
+                            background: '#2d2d2d', border: '1px solid #555', borderRadius: 6,
+                            padding: 4, minWidth: 160, boxShadow: '0 4px 16px rgba(0,0,0,0.5)',
                         }}
                         onMouseDown={e => e.stopPropagation()}
                         onPointerDown={e => e.stopPropagation()}
@@ -212,22 +149,13 @@ export default function Editor({ onClose, map }: { onClose: () => void; map: map
                             value={search}
                             onChange={e => setSearch(e.target.value)}
                             style={{
-                                width: '100%',
-                                boxSizing: 'border-box',
-                                padding: '5px 8px',
-                                border: '1px solid #555',
-                                borderRadius: 4,
-                                background: '#1e1e1e',
-                                color: '#fff',
-                                fontSize: 12,
-                                outline: 'none',
-                                marginBottom: 4,
+                                width: '100%', boxSizing: 'border-box', padding: '5px 8px',
+                                border: '1px solid #555', borderRadius: 4, background: '#1e1e1e',
+                                color: '#fff', fontSize: 12, outline: 'none', marginBottom: 4,
                             }}
                             onKeyDown={e => {
                                 if (e.key === 'Escape') setMenu({ visible: false });
-                                if (e.key === 'Enter' && filtered.length > 0) {
-                                    addNode(filtered[0]);
-                                }
+                                if (e.key === 'Enter' && filtered.length > 0) addNode(filtered[0]);
                             }}
                         />
                         <div style={{ maxHeight: 200, overflowY: 'auto' }}>
@@ -235,13 +163,7 @@ export default function Editor({ onClose, map }: { onClose: () => void; map: map
                                 <div
                                     key={factory.label}
                                     onClick={() => addNode(factory)}
-                                    style={{
-                                        padding: '6px 10px',
-                                        color: '#ddd',
-                                        fontSize: 12,
-                                        cursor: 'pointer',
-                                        borderRadius: 3,
-                                    }}
+                                    style={{ padding: '6px 10px', color: '#ddd', fontSize: 12, cursor: 'pointer', borderRadius: 3 }}
                                     onMouseEnter={e => (e.currentTarget.style.background = '#4a90d9')}
                                     onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
                                 >
@@ -249,9 +171,7 @@ export default function Editor({ onClose, map }: { onClose: () => void; map: map
                                 </div>
                             ))}
                             {filtered.length === 0 && (
-                                <div style={{ padding: '6px 10px', color: '#888', fontSize: 12 }}>
-                                    No nodes found
-                                </div>
+                                <div style={{ padding: '6px 10px', color: '#888', fontSize: 12 }}>No nodes found</div>
                             )}
                         </div>
                     </div>
@@ -259,23 +179,12 @@ export default function Editor({ onClose, map }: { onClose: () => void; map: map
             </div>
             {execLog && (
                 <div style={{
-                    borderTop: '1px solid #444',
-                    background: '#181818',
-                    maxHeight: 120,
-                    overflowY: 'auto',
-                    padding: '6px 12px',
-                    fontFamily: 'monospace',
-                    fontSize: 11,
-                    color: '#ccc',
+                    borderTop: '1px solid #444', background: '#181818', maxHeight: 120,
+                    overflowY: 'auto', padding: '6px 12px', fontFamily: 'monospace', fontSize: 11, color: '#ccc',
                 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
                         <span style={{ color: '#4caf50', fontWeight: 600, fontSize: 11 }}>Output</span>
-                        <span
-                            onClick={() => setExecLog(null)}
-                            style={{ color: '#888', cursor: 'pointer', fontSize: 11 }}
-                        >
-                            clear
-                        </span>
+                        <span onClick={() => setExecLog(null)} style={{ color: '#888', cursor: 'pointer', fontSize: 11 }}>clear</span>
                     </div>
                     {execLog.map((line, i) => (
                         <div key={i} style={{ lineHeight: 1.6 }}>{line}</div>

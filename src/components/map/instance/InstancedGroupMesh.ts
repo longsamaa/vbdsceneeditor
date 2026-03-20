@@ -44,8 +44,8 @@ class InstancedGroupMesh extends THREE.Group {
             this.add(instancedMesh)
         })
     }
-    updateMaterial(lightMatrix: THREE.Matrix4 | undefined,
-            shadowMap: THREE.WebGLRenderTarget | undefined)
+    updateMaterial(_lightMatrix: THREE.Matrix4 | undefined,
+            _shadowMap: THREE.WebGLRenderTarget | undefined)
     {
         Object.values(this.instanceCollect).forEach(instancedMesh => {
             console.log(instancedMesh.material); 

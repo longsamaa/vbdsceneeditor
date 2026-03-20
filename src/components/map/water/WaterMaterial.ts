@@ -1,5 +1,57 @@
 import * as THREE from 'three'
 
+export type WaterSettings = {
+    waterColor: string | number;
+    deepWaterColor: string | number;
+    shallowWaterColor: string | number;
+    foamColor: string | number;
+    waveSpeed: number;
+    opacity: number;
+    uvScale: number;
+    distortionScale: number;
+    noiseStrength: number;
+    lightRayStrength: number;
+    reflectionStrength: number;
+    reflectionDistort: number;
+}
+
+export const DEFAULT_WATER_SETTINGS: WaterSettings = {
+  waterColor: "#2c6e8f",
+  deepWaterColor: "#0f3a50",
+  shallowWaterColor: "#6fb7cc",
+  foamColor: "#ecf6f8",
+  waveSpeed: 2.0,
+  opacity: 1.0,
+  uvScale: 0.0015,
+  distortionScale: 3.0,
+  noiseStrength: 0.5,
+  lightRayStrength: 0.15,
+  reflectionStrength: 0.5,
+  reflectionDistort: 0.1,
+};
+
+export function normalizeWaterSettings(settings?: Partial<WaterSettings>): WaterSettings {
+  return {
+    waterColor: settings?.waterColor ?? DEFAULT_WATER_SETTINGS.waterColor,
+    deepWaterColor: settings?.deepWaterColor ?? DEFAULT_WATER_SETTINGS.deepWaterColor,
+    shallowWaterColor:
+      settings?.shallowWaterColor ?? DEFAULT_WATER_SETTINGS.shallowWaterColor,
+    foamColor: settings?.foamColor ?? DEFAULT_WATER_SETTINGS.foamColor,
+    waveSpeed: settings?.waveSpeed ?? DEFAULT_WATER_SETTINGS.waveSpeed,
+    opacity: settings?.opacity ?? DEFAULT_WATER_SETTINGS.opacity,
+    uvScale: settings?.uvScale ?? DEFAULT_WATER_SETTINGS.uvScale,
+    distortionScale:
+      settings?.distortionScale ?? DEFAULT_WATER_SETTINGS.distortionScale,
+    noiseStrength: settings?.noiseStrength ?? DEFAULT_WATER_SETTINGS.noiseStrength,
+    lightRayStrength:
+      settings?.lightRayStrength ?? DEFAULT_WATER_SETTINGS.lightRayStrength,
+    reflectionStrength:
+      settings?.reflectionStrength ?? DEFAULT_WATER_SETTINGS.reflectionStrength,
+    reflectionDistort:
+      settings?.reflectionDistort ?? DEFAULT_WATER_SETTINGS.reflectionDistort,
+  };
+}
+
 export type WaterOpts = {
     color: number,
     opacity: number,
@@ -291,10 +343,9 @@ export class WaterReflectionMaterial extends THREE.ShaderMaterial {
                 normalMap: { value: normalMap },
                 lightDir: { value: new THREE.Vector3(0.5, 1.0, 0.5).normalize() },
                 time: { value: 0 },
-                waveSpeed: { value: 5.0 },
+                waveSpeed: { value: 2.0 },
                 opacity: { value: 1.0 },
                 uvScale: { value: 0.0025 },
-                specularStrength: { value: 0.8 },
                 distortionScale: { value: 3.0 },
                 noiseStrength: { value: 0.25 },
                 lightRayStrength: { value: 0.08 },
@@ -336,7 +387,6 @@ export class WaterReflectionMaterial extends THREE.ShaderMaterial {
             uniform float opacity;
             uniform float time;
             uniform float waveSpeed;
-            uniform float specularStrength;
             uniform float distortionScale;
             uniform vec3 lightDir;
             uniform float noiseStrength;
@@ -424,37 +474,21 @@ export class WaterReflectionMaterial extends THREE.ShaderMaterial {
                 lightRays = smoothstep(0.45, 0.75, lightRays);
                 fresnelColor += vec3(1.0, 1.0, 0.98) * lightRays * lightRayStrength;
 
-                // === 6. Specular ===
-                vec3 specular = vec3(0.0);
-                vec3 reflectDir = reflect(-lightDir, finalNormal);
-                float sharpSpec = pow(max(dot(viewDir, reflectDir), 0.0), 64.0);
-                specular += vec3(1.0, 0.98, 0.9) * sharpSpec * 0.4;
-
-                vec3 halfDir = normalize(lightDir + viewDir);
-                float softSpec = pow(max(dot(finalNormal, halfDir), 0.0), 16.0);
-                specular += vec3(0.9, 0.95, 1.0) * softSpec * 0.3;
-
-                float ambientHL = pow(1.0 - abs(dot(viewDir, finalNormal)), 2.0);
-                specular += vec3(1.0) * ambientHL * 0.1;
-
-                specular *= specularStrength;
-                specular *= (0.95 + smallNoise * 0.1);
-
-                // === 7. Foam ===
+                // === 6. Foam ===
                 float foamNoise = fbm(vWorldUV * 15.0 + animSpeed * 0.3);
                 float foamMask = smoothstep(0.7, 0.9, foamNoise) * fresnel;
                 vec3 foam = foamColor * foamMask * 0.3;
 
-                // === 8. SUBTLE SPARKLES ===
+                // === 7. SUBTLE SPARKLES ===
                 float sparkle = pow(smallNoise, 12.0) * step(0.985, smallNoise);
                 vec3 sparkles = vec3(1.0, 1.0, 0.98) * sparkle * 0.25;
 
-                // === 9. Water Color (same as createWaterMaterial) ===
+                // === 8. Water Color (same as createWaterMaterial) ===
                 vec3 waterResult = fresnelColor + foam + sparkles;
                 float colorShift = noise(vWorldUV * 4.0 + animSpeed * 0.06);
                 waterResult = mix(waterResult, waterResult * 1.06, colorShift * 0.08);
 
-                // === 10. Reflection Blend ===
+                // === 9. Reflection Blend ===
                 vec3 finalColor = waterResult;
                 if(hasReflection) {
                     vec2 screenUV = vClip.xy / vClip.w * 0.5 + 0.5;
@@ -465,9 +499,6 @@ export class WaterReflectionMaterial extends THREE.ShaderMaterial {
                     reflMix = clamp(reflMix, 0.0, 0.75);
                     finalColor = mix(waterResult, refl, reflMix);
                 }
-
-                // Specular always on top
-                finalColor += specular;
 
                 gl_FragColor = vec4(finalColor, opacity);
             }
@@ -510,5 +541,37 @@ export class WaterReflectionMaterial extends THREE.ShaderMaterial {
 
     setLightDir(dir: THREE.Vector3): void {
         (this.uniforms.lightDir.value as THREE.Vector3).copy(dir);
+    }
+
+    applySettings(s: Partial<WaterSettings>): void {
+        if (s.waterColor !== undefined) (this.uniforms.waterColor.value as THREE.Color).set(s.waterColor as any);
+        if (s.deepWaterColor !== undefined) (this.uniforms.deepWaterColor.value as THREE.Color).set(s.deepWaterColor as any);
+        if (s.shallowWaterColor !== undefined) (this.uniforms.shallowWaterColor.value as THREE.Color).set(s.shallowWaterColor as any);
+        if (s.foamColor !== undefined) (this.uniforms.foamColor.value as THREE.Color).set(s.foamColor as any);
+        if (s.waveSpeed !== undefined) this.uniforms.waveSpeed.value = s.waveSpeed;
+        if (s.opacity !== undefined) this.uniforms.opacity.value = s.opacity;
+        if (s.uvScale !== undefined) this.uniforms.uvScale.value = s.uvScale;
+        if (s.distortionScale !== undefined) this.uniforms.distortionScale.value = s.distortionScale;
+        if (s.noiseStrength !== undefined) this.uniforms.noiseStrength.value = s.noiseStrength;
+        if (s.lightRayStrength !== undefined) this.uniforms.lightRayStrength.value = s.lightRayStrength;
+        if (s.reflectionStrength !== undefined) this.uniforms.reflectionStrength.value = s.reflectionStrength;
+        if (s.reflectionDistort !== undefined) this.uniforms.reflectionDistort.value = s.reflectionDistort;
+    }
+
+    getSettings(): WaterSettings {
+        return {
+            waterColor: '#' + (this.uniforms.waterColor.value as THREE.Color).getHexString(),
+            deepWaterColor: '#' + (this.uniforms.deepWaterColor.value as THREE.Color).getHexString(),
+            shallowWaterColor: '#' + (this.uniforms.shallowWaterColor.value as THREE.Color).getHexString(),
+            foamColor: '#' + (this.uniforms.foamColor.value as THREE.Color).getHexString(),
+            waveSpeed: this.uniforms.waveSpeed.value,
+            opacity: this.uniforms.opacity.value,
+            uvScale: this.uniforms.uvScale.value,
+            distortionScale: this.uniforms.distortionScale.value,
+            noiseStrength: this.uniforms.noiseStrength.value,
+            lightRayStrength: this.uniforms.lightRayStrength.value,
+            reflectionStrength: this.uniforms.reflectionStrength.value,
+            reflectionDistort: this.uniforms.reflectionDistort.value,
+        };
     }
 }

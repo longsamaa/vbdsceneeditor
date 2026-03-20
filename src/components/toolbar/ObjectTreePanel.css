@@ -1,8 +1,4 @@
 .otp-container {
-    position: absolute;
-    left: 10px;
-    top: 150px;
-    z-index: 2000;
     font-family: system-ui, sans-serif;
 }
 .otp-panel {
@@ -71,6 +67,20 @@
 }
 .otp-tile-header.collapsed svg {
     transform: rotate(-90deg);
+}
+.otp-export-btn {
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    padding: 2px;
+    border-radius: 3px;
+    color: rgba(32, 32, 32, 0.5);
+    display: flex;
+    align-items: center;
+}
+.otp-export-btn:hover {
+    background: rgba(0, 0, 0, 0.08);
+    color: #1a73e8;
 }
 .otp-tile-count {
     margin-left: auto;

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import maplibregl, {MapMouseEvent,} from 'maplibre-gl';
+import {MapMouseEvent,} from 'maplibre-gl';
 import type {CustomLayerInterface, Map} from 'maplibre-gl';
 import type {ReflectionCasterLayer, PrerenderGeometryLayer} from '../Interface';
 import {WaterRenderTarget} from './WaterRenderTarget';
@@ -48,7 +48,7 @@ export class ReflectionOrchestrator implements CustomLayerInterface {
         map.on('click', this.handleClick);
     }
 
-    private handleClick = (e: MapMouseEvent) => {
+    private handleClick = (_e: MapMouseEvent) => {
         this.isClick = true; 
     };
 
