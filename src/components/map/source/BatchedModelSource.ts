@@ -1,4 +1,4 @@
-import { type CustomSource, type DataTileState } from './SourceInterface'
+import { type TileSource, type DataTileState } from './SourceInterface'
 import { LRUCache } from 'lru-cache';
 import maplibregl, { OverscaledTileID, } from 'maplibre-gl';
 import * as THREE from 'three'
@@ -18,7 +18,7 @@ type BatchedModelTileData = {
     state : DataTileState;
 }
 
-export class BatchedModelSource implements CustomSource {
+export class BatchedModelSource implements TileSource {
     id: string;
     url: string;
     readonly type = 'batched_model' as const;

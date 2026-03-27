@@ -503,11 +503,9 @@ export class WaterReflectionMaterial extends THREE.ShaderMaterial {
                 gl_FragColor = vec4(finalColor, opacity);
             }
             `,
-
             transparent: true,
             depthWrite: false,
             side: THREE.FrontSide,
-
         });
 
     }

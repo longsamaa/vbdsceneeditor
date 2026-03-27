@@ -124,11 +124,10 @@ export class ReflectionOrchestrator implements CustomLayerInterface {
         const tr = (this.map as any).transform;
         this.reflectionPass.clearReflection(this.renderer);
         for (const caster of this.casters) {
-             if (!caster.visible) continue;
+            if (!caster.visible) continue;
+            this.renderer.resetState();
             caster.renderReflection(this.renderer, this.reflectionMatrix, tr.worldSize);
         }
-        // // 6. Reset WebGL state
-        this.renderer.resetState();
     }
 
     resizeReflectionMap(size: number): void {

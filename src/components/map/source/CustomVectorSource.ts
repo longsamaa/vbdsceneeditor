@@ -1,15 +1,8 @@
-import {type CustomSource} from './SourceInterface'
+import {type TileSource, type VectorSourceLike, type VectorTileData} from './SourceInterface'
 import {LRUCache} from 'lru-cache';
 import {TileFetcher} from './TileFetcher'
 import type {WorkerOutput} from './SourceWorker.ts'
-import type {JsonVectorTile} from './GeojsonConverter.ts'
 import maplibregl, {OverscaledTileID,} from 'maplibre-gl';
-import type {DataTileState} from './SourceInterface.ts'
-
-type CustomVectorTileData = {
-    data: JsonVectorTile | null;
-    state: DataTileState;
-}
 
 export type CustomVectorSourceOpts = {
     id: string,
@@ -25,7 +18,7 @@ export type GetTileOptions = {
     build_triangle : boolean,
 }
 
-export class CustomVectorSource implements CustomSource {
+export class CustomVectorSource implements TileSource, VectorSourceLike {
     id: string;
     url: string;
     readonly type = 'custom_vector' as const;
@@ -36,7 +29,7 @@ export class CustomVectorSource implements CustomSource {
     tileFetcher: TileFetcher = new TileFetcher(8);
     private onUnloadTile: Array<(tile_key: string) => void> = [];
     private worker: Worker | null = null;
-    private tileCache: LRUCache<string, CustomVectorTileData>;
+    private tileCache: LRUCache<string, VectorTileData>;
     constructor(opts: CustomVectorSourceOpts) {
         this.map = opts.map;
         this.id = opts.id;
@@ -44,7 +37,7 @@ export class CustomVectorSource implements CustomSource {
         this.minZoom = opts.minZoom;
         this.maxZoom = opts.maxZoom;
         this.tileSize = opts.tileSize;
-        this.tileCache = new LRUCache<string, CustomVectorTileData>({
+        this.tileCache = new LRUCache<string, VectorTileData>({
             max: opts.maxTileCache ?? 1024,
             dispose: (tile,tile_key) => {
                 if (tile?.state === 'preparing') {
@@ -97,7 +90,7 @@ export class CustomVectorSource implements CustomSource {
         this.map?.triggerRepaint();
     }
 
-    getTile(tile: OverscaledTileID, opts : GetTileOptions): CustomVectorTileData {
+    getTile(tile: OverscaledTileID, opts : GetTileOptions): VectorTileData {
         const string_key = this.tileKey(tile);
         let tileData = this.tileCache.get(string_key);
         if (!tileData) {

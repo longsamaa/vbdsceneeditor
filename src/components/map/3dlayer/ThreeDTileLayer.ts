@@ -94,7 +94,7 @@ export class ThreeDTileLayer implements Custom3DTileRenderLayer, ShadowCasterLay
         }
     }
 
-    setBatchedSource(b_source: BatchedModelSource): void {
+    setSource(b_source: BatchedModelSource): void {
         this.source = b_source;
         this.source.registerUnLoadTile((tile_key: string) => {
             if (this.tileCache.has(tile_key)) {
@@ -244,6 +244,7 @@ export class ThreeDTileLayer implements Custom3DTileRenderLayer, ShadowCasterLay
         if (!this.map || !this.source) {
             return;
         }
+        if (this.map.getZoom() < this.minZoom) return;
         this._currentZoom = clampZoom(
             this.source.minZoom,
             this.source.maxZoom,
@@ -408,7 +409,6 @@ export class ThreeDTileLayer implements Custom3DTileRenderLayer, ShadowCasterLay
                 const tileMatrix = projectionData.mainMatrix;
                 this.camera.projectionMatrix = new THREE.Matrix4().fromArray(tileMatrix);
                 this.updateShadowLitMaterials(tileInfo, tile_key);
-                //this.updateShadow(tileInfo.sceneTile);
                 this.renderer.render(tileInfo.sceneTile, this.camera);
             }
         }

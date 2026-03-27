@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import * as SunCalc from 'suncalc';
+// @ts-ignore
+import SunCalc from 'suncalc';
 
 export function createSunLightArrow(dir: THREE.Vector3, scaleUnit: number): THREE.ArrowHelper {
     const length = 3000;

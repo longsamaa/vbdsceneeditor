@@ -1,10 +1,10 @@
 import maplibregl, {MapMouseEvent,} from 'maplibre-gl';
 import {reverseFaceWinding} from '../model/objModel.ts';
 import {classifyRings} from '@mapbox/vector-tile';
-import {clampZoom, latlonToLocal} from '../convert/map_convert.ts';
+import {clampZoom, latlonToLocal, tileLocalToLatLon, projectToWorldCoordinates} from '../convert/map_convert.ts';
 import type {Custom3DTileRenderLayer, PickHit, SunOptions, SunParamater, PrerenderGeometryLayer} from '../Interface.ts'
 import * as THREE from 'three';
-import {CustomVectorSource} from "../source/CustomVectorSource.ts"
+import type {VectorSourceLike} from "../source/SourceInterface.ts"
 import {buildGeo, triangulatePolygonWithHoles} from "../source/GeojsonConverter.ts";
 import type {Feature, GeoJsonProperties, MultiPolygon, Polygon, Position} from 'geojson';
 import {WaterReflectionMaterial, type WaterSettings} from "./WaterMaterial.ts";
@@ -12,6 +12,7 @@ import * as turf from "@turf/turf";
 import {calculateSunDirectionMaplibre} from "../shadow/ShadowHelper.ts";
 import {getSharedRenderer} from "../SharedRenderer.ts";
 import { getSharedReflectionPass, ReflectionPass } from '../water/ReflectionPass.ts';
+import {createMapLibreMatrix, calculateTileMatrixThree} from '../shadow/ShadowCamera.ts';
 
 export type WaterLayerOpts = {
     id: string;
@@ -37,21 +38,20 @@ export class WaterLayer implements Custom3DTileRenderLayer, PrerenderGeometryLay
     tileSize: number = 512;
     //waterMaterial: THREE.ShaderMaterial | null = null;
     waterMaterial : WaterReflectionMaterial | null = null; 
-    private vectorSource: CustomVectorSource | null = null;
+    private vectorSource: VectorSourceLike | null = null;
     private mainScene: THREE.Scene | null = null;
     private sun: SunParamater | null | undefined;
     private tilekeyToDrawWater: string = '';
     private map: maplibregl.Map | null = null;
     private renderer: THREE.WebGLRenderer | null = null;
     private camera: THREE.Camera | null = null;
-    private applyGlobeMatrix: boolean | false = false;
     private waterNormalTexture: THREE.Texture | null = null;
     private waterGeometry: Feature<Polygon | MultiPolygon, GeoJsonProperties> | null = null;
     private isRebuildWaterGeometry: boolean = true;
     private minZoom: number = 0;
     private maxZoom: number = 20;
     private readonly TILE_EXTENT = 8192;
-    private _projMatrix = new THREE.Matrix4();
+    private _viewProjMatrix: THREE.Matrix4 = new THREE.Matrix4();
     private _visibleTiles: any[] = [];
     private _zoom: number = 0;
     private reflectionPass : ReflectionPass | null = null;
@@ -60,7 +60,6 @@ export class WaterLayer implements Custom3DTileRenderLayer, PrerenderGeometryLay
 
     constructor(opts: WaterLayerOpts & { onPick?: (info: PickHit) => void } & { onPickfail?: () => void }) {
         this.id = opts.id;
-        this.applyGlobeMatrix = opts.applyGlobeMatrix;
         this.onPick = opts.onPick;
         this.onPickfail = opts.onPickfail;
         this.sourceLayer = opts.sourceLayer;
@@ -110,7 +109,7 @@ export class WaterLayer implements Custom3DTileRenderLayer, PrerenderGeometryLay
         this.visible = visible;
     }
 
-    setVectorSource(source: CustomVectorSource): void {
+    setSource(source: VectorSourceLike): void {
         this.vectorSource = source;
     }
 
@@ -139,11 +138,36 @@ export class WaterLayer implements Custom3DTileRenderLayer, PrerenderGeometryLay
         this._doPrerenderGeometry();
     }
 
+    private _computeViewProjMatrix(): void {
+        if (!this.map) return;
+        const tr = this.map.transform as any;
+        const point = projectToWorldCoordinates(tr.worldSize, {
+            lat: tr.center.lat,
+            lon: tr.center.lng,
+        });
+        this._viewProjMatrix = createMapLibreMatrix(
+            tr.fovInRadians,
+            tr.width,
+            tr.height,
+            tr.nearZ,
+            tr.farZ * 2.0,
+            tr.cameraToCenterDistance,
+            tr.rollInRadians,
+            tr.pitchInRadians,
+            tr.bearingInRadians,
+            point.x,
+            point.y,
+            tr.pixelsPerMeter,
+            tr.elevation,
+        );
+    }
+
     private _doPrerenderGeometry(): void {
         if (!this.map || !this.vectorSource || !this.isRebuildWaterGeometry) {
             return;
         }
         if (this.map.getZoom() <= this.minZoom) return;
+        this._computeViewProjMatrix();
         this._zoom = clampZoom(
             this.vectorSource.minZoom,
             this.vectorSource.maxZoom,
@@ -221,10 +245,29 @@ export class WaterLayer implements Custom3DTileRenderLayer, PrerenderGeometryLay
             this.mainScene?.clear();
             //build geo
             const geometry = this.waterGeometry?.geometry;
+            const hasTerrain = !!this.map?.getTerrain();
             const buildGeoFromPolygon = (polygon: Position[][]) => {
-                const {vertices, indices} = triangulatePolygonWithHoles(polygon);
+                const maxSeg = hasTerrain ? 200 : 0;
+                const {vertices, indices} = triangulatePolygonWithHoles(polygon, maxSeg);
                 const geo = buildGeo(vertices, indices);
                 reverseFaceWinding(geo);
+                // Apply per-vertex terrain elevation for water surface
+                if (hasTerrain && this.map) {
+                    const posAttr = geo.getAttribute('position') as THREE.BufferAttribute;
+                    for (let i = 0; i < posAttr.count; i++) {
+                        const localX = posAttr.getX(i);
+                        const localY = posAttr.getY(i);
+                        const latLon = tileLocalToLatLon(
+                            this._zoom, rootTile.tileX, rootTile.tileY,
+                            localX, localY,
+                        );
+                        const elev = this.map.queryTerrainElevation([latLon.lon, latLon.lat]);
+                        if (elev !== null) {
+                            posAttr.setZ(i, elev);
+                        }
+                    }
+                    posAttr.needsUpdate = true;
+                }
                 if (this.waterMaterial) {
                     const waterMesh = new THREE.Mesh(geo, this.waterMaterial);
                     this.mainScene?.add(waterMesh);
@@ -296,16 +339,14 @@ export class WaterLayer implements Custom3DTileRenderLayer, PrerenderGeometryLay
         if (!this.map || !this.camera || !this.renderer || !this.visible || !this.vectorSource || !this.mainScene ) {
             return;
         }
-        const tr = this.map.transform;
-        if(tr.zoom <= this.minZoom) return; 
+        const tr = this.map.transform as any;
+        if(tr.zoom <= this.minZoom) return;
+        this._computeViewProjMatrix();
         for (const tile of this._visibleTiles) {
             const tile_key = this.tileKey(tile.canonical.x, tile.canonical.y, tile.canonical.z);
             if (tile_key === this.tilekeyToDrawWater) {
-                const projectionData = tr.getProjectionData({
-                    overscaledTileID: tile,
-                    applyGlobeMatrix: this.applyGlobeMatrix,
-                });
-                this.camera.projectionMatrix = this._projMatrix.fromArray(projectionData.mainMatrix);
+                const tileMatrix = calculateTileMatrixThree(tile.toUnwrapped(), tr.worldSize);
+                this.camera.projectionMatrix = new THREE.Matrix4().multiplyMatrices(this._viewProjMatrix, tileMatrix);
                 this.animate();
                 this.renderer.resetState();
                 this.renderer.render(this.mainScene, this.camera);

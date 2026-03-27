@@ -1,33 +1,37 @@
 // MapView.tsx
-import React, {forwardRef, lazy, Suspense, useCallback, useEffect, useImperativeHandle, useRef, useState} from 'react';
+import React, { forwardRef, lazy, Suspense, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import * as THREE from 'three';
 import './MapView.css'
-import {type EditableLayer, LayerEditControl} from '../toolbar/LayerEditCtrl'
-import {Map4DModelsThreeLayer} from './3dlayer/ThreeDLayer.ts'
-import {OverlayLayer} from './gizmo/OverlayLayer'
+import { type EditableLayer, LayerEditControl } from '../toolbar/LayerEditCtrl'
+import { Map4DModelsThreeLayer } from './3dlayer/ThreeDLayer.ts'
+import { OverlayLayer } from './gizmo/OverlayLayer'
 import OutlineLayer from './gizmo/OutlineLayer.ts'
-import type {TransformMode} from '../toolbar/TransformToolbar'
-import {loadModelFromGlb, decomposeObject, parseUrl} from './model/objModel.ts'
-import {EditLayer} from "./edit/EditLayer.ts";
-import {latlonToLocal} from "./convert/map_convert.ts";
-import type {Custom3DTileRenderLayer, UserData} from "./Interface.ts";
-import {CustomEditLayerManager} from "./CustomEditLayerManager.ts"
-import {WaterLayer} from "./water/WaterLayer.ts"
-import {CustomVectorSource} from "./source/CustomVectorSource.ts"
-import {InstanceLayer} from "./instance/InstanceLayer.ts"
-import {ShadowOrchestrator} from "./shadow/ShadowOrchestrator.ts"
-import {ReflectionOrchestrator} from "./water/ReflectionOrchestrator.ts"
-import {deleteModelFromDb, saveModelToDb} from "./api/modelApi.ts"
-import {getSharedShadowPass} from "./shadow/ShadowMapPass.ts"
-import {getSunPosition} from "./shadow/ShadowHelper.ts"
-import {ObjectTreePanel, type TileNode} from "../toolbar/ObjectTreePanel.tsx"
-import {ObjectPalette, type PrimitiveType} from "../toolbar/ObjectPalette.tsx"
-import {PropertiesPanel, type ObjectProperties} from "../toolbar/PropertiesPanel.tsx"
-import {GraphicsSettings, type GraphicsConfig} from "../toolbar/GraphicsSettings.tsx"
+import type { TransformMode } from '../toolbar/TransformToolbar'
+import { loadModelFromGlb, decomposeObject, parseUrl } from './model/objModel.ts'
+import { EditLayer } from "./edit/EditLayer.ts";
+import { latlonToLocal } from "./convert/map_convert.ts";
+import type { Custom3DTileRenderLayer, UserData } from "./Interface.ts";
+import { CustomEditLayerManager } from "./CustomEditLayerManager.ts"
+import { WaterLayer } from "./water/WaterLayer.ts"
+import { CustomVectorSource } from "./source/CustomVectorSource.ts"
+import { InstanceLayer } from "./instance/InstanceLayer.ts"
+import { ShadowOrchestrator } from "./shadow/ShadowOrchestrator.ts"
+import { ReflectionOrchestrator } from "./water/ReflectionOrchestrator.ts"
+import { deleteModelFromDb, saveModelToDb } from "./api/modelApi.ts"
+import { getSharedShadowPass } from "./shadow/ShadowMapPass.ts"
+import { getSunPosition } from "./shadow/ShadowHelper.ts"
+import { ObjectTreePanel, type TileNode } from "../toolbar/ObjectTreePanel.tsx"
+import { ObjectPalette, type PrimitiveType } from "../toolbar/ObjectPalette.tsx"
+import { PropertiesPanel, type ObjectProperties } from "../toolbar/PropertiesPanel.tsx"
+import { GraphicsSettings, type GraphicsConfig } from "../toolbar/GraphicsSettings.tsx"
 import { BatchedModelSource } from './source/BatchedModelSource.ts';
 import { ThreeDTileLayer } from './3dlayer/ThreeDTileLayer.ts';
+import { CustomGeoJsonSource } from './source/CustomGeoJsonSource.ts';
+import { TubeLayer } from './3dlayer/TubeLayer.ts';
+import { ExtrusionLayer } from './3dlayer/ExtrusionLayer.ts'
+import { GroundLayer } from './3dlayer/GroundLayer.ts'
 
 const Editor = lazy(() => import('../nodeeditor/Editor'));
 
@@ -84,9 +88,12 @@ const MAP4D_LAYER_ID = import.meta.env.VITE_MAP4D_LAYER_ID ?? 'test_layer';
 const HIGH_PERFORMANCE_RENDER = import.meta.env.VITE_HIGH_PERFORMANCE_RENDER === 'true';
 const VECTOR_SOURCE_URL = import.meta.env.VITE_MAP4D_TILE_URL;
 const ROOT_MODEL_URL = import.meta.env.VITE_ROOT_MODEL_URL;
+const TERRAIN_URL = import.meta.env.VITE_TERRAIN_URL;
 
 function createSunOptions(lat: number, lon: number) {
-    const pos = getSunPosition(lat, lon);
+    const date = new Date();
+    date.setUTCHours(14 - 7, 37, 0, 0);
+    const pos = getSunPosition(lat, lon, date);
     return {
         shadow: true,
         altitude: pos.altitude,
@@ -109,8 +116,8 @@ function createNewEditorLayer(map: maplibregl.Map): EditLayer {
         id: uuid(),
         editorLevel: 16,
         applyGlobeMatrix: false,
-        onPick: () => {},
-        onPickfail: () => {}
+        onPick: () => { },
+        onPickfail: () => { }
     });
     const map4d_layer = map.getLayer(MAP4D_LAYER_ID) as unknown as Custom3DTileRenderLayer;
     if (map4d_layer) {
@@ -185,14 +192,10 @@ function addObjectToEditLayerFromUrl(
 function createDefaultMap(map: maplibregl.Map, overlay_layer: OverlayLayer, outline_layer: OutlineLayer, layerManager: CustomEditLayerManager): void {
     const center = map.getCenter();
     const sun_options = createSunOptions(center.lat, center.lng);
-
-    // map.setBearing(sun_options.azimuth - 180);
-    // map.setPitch(90);
-
     const map4dSource = new CustomVectorSource({
         id: 'map4d source',
         url: VECTOR_SOURCE_URL,
-        minZoom: 0,
+        minZoom: 15,
         maxZoom: 18,
         tileSize: 512,
         maxTileCache: 1024,
@@ -203,10 +206,10 @@ function createDefaultMap(map: maplibregl.Map, overlay_layer: OverlayLayer, outl
         id: 'vector_tile_3d',
         sourceLayer: 'map4d_3dmodels',
         rootUrl: ROOT_MODEL_URL,
-        minZoom: 14,
-        maxZoom: 19,
+        minZoom: 15,
+        maxZoom: 22,
     });
-    map4d_layer.setVectorSource(map4dSource);
+    map4d_layer.setSource(map4dSource);
 
     // Set sun on shared shadow pass
     getSharedShadowPass(8192).setSunOptions(sun_options);
@@ -214,36 +217,26 @@ function createDefaultMap(map: maplibregl.Map, overlay_layer: OverlayLayer, outl
     // Shadow orchestrator - add FIRST so its render() runs shadow passes before other layers' render()
     const shadowOrchestrator = new ShadowOrchestrator('shadow-orchestrator');
     map.addLayer(shadowOrchestrator);
-
+    // Ground layer - add AFTER water, BEFORE other custom layers
     map4d_layer.useOrchestrator = true;
     map.addLayer(map4d_layer);
 
-    // Water layer
-    const customSource = new CustomVectorSource({
-        id: 'test-custom-source',
-        url: 'https://images.daklak.gov.vn/v2/tile/{z}/{x}/{y}/306ec9b5-8146-4a83-9271-bd7b343a574a',
-        minZoom: 0,
-        maxZoom: 16,
-        tileSize: 512,
-        maxTileCache: 1024,
-        map,
-    });
     // Instance layer
     const instanceCustomSource = new CustomVectorSource({
         id: 'test-custom-source',
         url: 'http://10.222.3.81:8083/VietbandoMapService/api/image/?Function=GetVectorTile&MapName=IndoorNavigation&Level={z}&TileX={x}&TileY={y}&UseTileCache=true',
-        minZoom: 9,
-        maxZoom: 18,
+        minZoom: 14,
+        maxZoom: 16,
         tileSize: 512,
         maxTileCache: 1024,
         map,
     });
     const instance_layer = new InstanceLayer({
         id: 'instance_layer',
-        sourceLayer: 'trees',
+        sourceLayer: 'trees2',
         applyGlobeMatrix: false,
-        minZoom : 14,
-        maxZoom : 22,
+        minZoom: 14,
+        maxZoom: 22,
         objectUrl: [
             '/test_data/test_instance/tree2.glb',
             '/test_data/test_instance/tree3.glb',
@@ -255,7 +248,7 @@ function createDefaultMap(map: maplibregl.Map, overlay_layer: OverlayLayer, outl
         directional: { intensity: 2.0 },
         hemisphere: { intensity: 1.5 }
     });
-    instance_layer.setVectorSource(instanceCustomSource);
+    instance_layer.setSource(instanceCustomSource);
     instance_layer.setLayerSourceCastShadow(map4d_layer);
     instance_layer.useOrchestrator = true;
     map.addLayer(instance_layer);
@@ -284,58 +277,154 @@ function createDefaultMap(map: maplibregl.Map, overlay_layer: OverlayLayer, outl
     }
 
     const batched_source = new BatchedModelSource({
-        id : 'test-batched-source',
-        url : 'http://10.225.0.242:8080/{z}_{x}_{y}.glb', 
-        minZoom : 16, 
-        maxZoom : 16,
-        tileSize : 512, 
-        maxTileCache : 1024, 
-        map : map
-    }); 
+        id: 'test-batched-source',
+        url: import.meta.env.VITE_BATCHED_MODEL_URL,
+        minZoom: 16,
+        maxZoom: 16,
+        tileSize: 512,
+        maxTileCache: 1024,
+        map: map
+    });
+
+    // Custom GeoJSON Source
+    const geojsonSource = new CustomGeoJsonSource({
+        id: 'test-geojson-source',
+        map,
+        layerName: 'test',
+        minZoom: 0,
+        maxZoom: 18,
+    });
+    fetch('/test_data/geojson/test.geojson')
+        .then(r => r.json())
+        .then((fc: GeoJSON.FeatureCollection) => {
+            console.log(fc);
+            geojsonSource.setData(fc);
+        })
+        .catch(e => console.error('Load GeoJSON failed:', e));
 
     const batched_layer = new ThreeDTileLayer({
-        id : 'batched_model_layer', 
-        applyGlobeMatrix : false,
-        minZoom : 15, 
-        maxZoom : 22
-    }); 
+        id: 'batched_model_layer',
+        applyGlobeMatrix: false,
+        minZoom: 15,
+        maxZoom: 22
+    });
 
-    batched_layer.setBatchedSource(batched_source); 
-    batched_layer.setLayerSourceCastShadow(edit_layer); 
-    map.addLayer(batched_layer); 
-    batched_layer.useOrchestrator = true; 
+    batched_layer.setSource(batched_source);
+    batched_layer.setLayerSourceCastShadow(edit_layer);
+    map.addLayer(batched_layer);
+    batched_layer.useOrchestrator = true;
     map4d_layer.setLayerSourceCastShadow(edit_layer);
+
+    //Piple Layer 
+    const tube_layer = new TubeLayer({
+        id: 'tube_layer',
+        sourceLayer: 'vpipelines',
+        applyGlobeMatrix: false,
+        minZoom: 15,
+        maxZoom: 22,
+        color: 0x00aaff,
+    });
+    //10 m
+    const tube_layer_10m = new TubeLayer({
+        id: 'tube_layer_10m',
+        sourceLayer: 'vpipelines10m',
+        applyGlobeMatrix: false,
+        minZoom: 15,
+        maxZoom: 22,
+        color: 0xff0000,
+    });
+
+    tube_layer.setSource(map4dSource);
+    tube_layer.useOrchestrator = true;
+    tube_layer_10m.setSource(map4dSource);
+    tube_layer_10m.useOrchestrator = true;
+    map.addLayer(tube_layer);
+    map.addLayer(tube_layer_10m);
+
+    //Register extruction layer 
+
+    // const extrusion_layer = new ExtrusionLayer({
+    //     id: 'extrusion_layer',
+    //     sourceLayer: 'building_region',
+    //     applyGlobeMatrix: false,
+    //     minZoom: 14,
+    //     maxZoom: 22,
+    //     color: '#E8E0D4',
+    // });
+
+    // extrusion_layer.setSource(instanceCustomSource);
+    // extrusion_layer.useOrchestrator = true;  
+    // map.addLayer(extrusion_layer); 
+
+    //extrusion_layer.setSource
+
+
     // Register all shadow casters
     shadowOrchestrator.register(edit_layer);
     shadowOrchestrator.register(map4d_layer);
     shadowOrchestrator.register(instance_layer);
-    shadowOrchestrator.register(batched_layer); 
+    shadowOrchestrator.register(batched_layer);
+    shadowOrchestrator.register(tube_layer);
+    shadowOrchestrator.register(tube_layer_10m);
+    //shadowOrchestrator.register(extrusion_layer);
+
 
     // Register layers in layer manager for panel display
     layerManager.addNewLayer(map4d_layer.id, map4d_layer);
     layerManager.addNewLayer(instance_layer.id, instance_layer);
     layerManager.addNewLayer(edit_layer.id, edit_layer);
-    layerManager.addNewLayer(batched_layer.id,batched_layer); 
-
+    layerManager.addNewLayer(batched_layer.id, batched_layer);
+    layerManager.addNewLayer(tube_layer.id, tube_layer);
+    layerManager.addNewLayer(tube_layer_10m.id, tube_layer_10m);
+    //layerManager.addNewLayer(extrusion_layer.id,extrusion_layer); 
     //reflection orchestrator render add vao cuoi cung 
     const reflectionOrchestrator = new ReflectionOrchestrator('reflection-orchestrator');
-    map.addLayer(reflectionOrchestrator); 
+    map.addLayer(reflectionOrchestrator);
 
-    reflectionOrchestrator.register(map4d_layer); 
-    reflectionOrchestrator.register(instance_layer); 
-   // reflectionOrchestrator.register(batched_layer); 
+    reflectionOrchestrator.register(map4d_layer);
+    reflectionOrchestrator.register(instance_layer);
+    reflectionOrchestrator.register(batched_layer);
+    //reflectionOrchestrator.register(extrusion_layer); 
+    //reflectionOrchestrator.register(tube_layer);
+    //reflectionOrchestrator.register(tube_layer_10m);
 
     const waterLayer = new WaterLayer({
-        id: 'test_water_layer',
+        id: 'water_layer',
         applyGlobeMatrix: false,
-        sourceLayer: 'region_river_index',
+        sourceLayer: 'waters',
         normalUrl: '/normal/4141-normal.jpg',
         sun: sun_options,
     });
-    waterLayer.setVectorSource(customSource);
+    waterLayer.setSource(instanceCustomSource);
+    map.addLayer(waterLayer);
+    layerManager.addNewLayer(waterLayer.id, waterLayer);
     reflectionOrchestrator.registerPrerenderLayer(waterLayer);
     waterLayer.setRegisteredPrerender(true);
-    map.addLayer(waterLayer);
+
+    if (map.getTerrain()) {
+        const groundLayer = new GroundLayer({
+            id: 'ground_layer',
+            applyGlobeMatrix: false,
+            minZoom: 16,
+            maxZoom: 22,
+        });
+        map.addLayer(groundLayer);
+        layerManager.addNewLayer(groundLayer.id, groundLayer);
+        shadowOrchestrator.register(groundLayer);
+    }
+
+}
+
+function initLayers(
+    map: maplibregl.Map | null,
+    overlay_layer: OverlayLayer | null,
+    outline_layer: OutlineLayer | null,
+    layerManager: CustomEditLayerManager | null,
+): void {
+    if(!map || !overlay_layer || !outline_layer || !layerManager) return; 
+    createDefaultMap(map, overlay_layer, outline_layer, layerManager);
+    map.addLayer(outline_layer);
+    map.addLayer(overlay_layer);
 }
 
 function addControlMaplibre(map: maplibregl.Map): void {
@@ -362,9 +451,9 @@ function buildEditableLayers(
 }
 
 const MapView = forwardRef<MapViewHandle, MapViewProps>(({
-                                                             center = [106.72917030411851, 10.797981541869406],
-                                                             zoom = 12
-                                                         }, ref) => {
+    center = [106.72917030411851, 10.797981541869406],
+    zoom = 12
+}, ref) => {
     const mapContainer = useRef<HTMLDivElement>(null);
     const map = useRef<maplibregl.Map | null>(null);
     const editorLayerManager = useRef<CustomEditLayerManager | null>(null);
@@ -383,22 +472,19 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(({
     useEffect(() => {
         if (!mapContainer.current) return;
         editorLayerManager.current = new CustomEditLayerManager();
-
         map.current = new maplibregl.Map({
             container: mapContainer.current,
             style: 'style/vbd_style.json',
             center,
             zoom: 16.73229201555873,
-            pitch: 0,
-            maxPitch: 60,
+            pitch: 60,
             bearing: 0,
             pixelRatio: Math.min(window.devicePixelRatio, 2),
             maxZoom: 22,
             canvasContextAttributes: HIGH_PERFORMANCE_RENDER ? { antialias: true } : {}
         });
-        map.current._showTileBoundaries = true;
+        map.current.showTileBoundaries = false;
         addControlMaplibre(map.current);
-
         overlay_layer.current = createOverLayer();
         overlay_layer.current.onTransformChange = (obj) => {
             setSelectedProps(buildPropsFromObject(obj));
@@ -407,9 +493,30 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(({
 
         map.current.on('load', () => {
             if (!map.current || !overlay_layer.current || !outline_layer.current || !editorLayerManager.current) return;
-            createDefaultMap(map.current, overlay_layer.current, outline_layer.current, editorLayerManager.current);
-            map.current.addLayer(outline_layer.current);
-            map.current.addLayer(overlay_layer.current);
+            // Hide all style layers and set background to black
+            for (const layer of map.current.getStyle().layers) {
+                if (layer.id === 'background') {
+                    map.current.setPaintProperty(layer.id, 'background-color', '#000000');
+                } else if (layer.id === 'building3d') {
+                    map.current.setLayoutProperty(layer.id, 'visibility', 'none');
+                }
+            }
+
+            if (TERRAIN_URL) {
+                map.current.addSource('terrain-source', {
+                    type: 'raster-dem',
+                    tiles: [TERRAIN_URL],
+                    tileSize: 512,
+                    maxzoom: 14,
+                    minzoom: 14,
+                });
+                map.current.setTerrain({ source: 'terrain-source', exaggeration: 1.0 });
+                map.current.once('idle', () => {
+                     initLayers(map.current,overlay_layer.current,outline_layer.current,editorLayerManager.current);
+                 });
+            } else {
+                initLayers(map.current,overlay_layer.current,outline_layer.current,editorLayerManager.current);
+            }
         });
 
         map.current.on('styledata', () => {
@@ -562,6 +669,51 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(({
         map.current.triggerRepaint();
     }, []);
 
+    const handleToggleStyleLayers = useCallback((visible: boolean) => {
+        if (!map.current) return;
+        for (const layer of map.current.getStyle().layers) {
+            if (layer.id === 'background') {
+                map.current.setPaintProperty(layer.id, 'background-color', visible ? '#f0f0f0' : '#000000');
+            } else {
+                map.current.setLayoutProperty(layer.id, 'visibility', visible ? 'visible' : 'none');
+            }
+        }
+    }, []);
+
+    const handleToggleTerrain = useCallback((visible: boolean) => {
+        if (!map.current) return;
+        const center = map.current.getCenter();
+        const zoom = map.current.getZoom();
+        const pitch = map.current.getPitch();
+        const bearing = map.current.getBearing();
+
+        // Remove all custom layers from the map
+        if (editorLayerManager.current) {
+            for (const [id] of editorLayerManager.current.layer_cache) {
+                if (map.current.getLayer(id)) {
+                    map.current.removeLayer(id);
+                }
+            }
+        }
+        for (const layerId of ['shadow-orchestrator', 'reflection-orchestrator', 'ground_layer', 'overlayer_layer', 'outline_layer']) {
+            if (map.current.getLayer(layerId)) {
+                map.current.removeLayer(layerId);
+            }
+        }
+
+        if (visible) {
+            map.current.setTerrain({ source: 'terrain-source', exaggeration: 1.0 });
+            // Wait for terrain to load before re-creating layers
+            map.current.once('idle', () => {
+                initLayers(map.current,overlay_layer.current,outline_layer.current,editorLayerManager.current);
+            });
+        } else {
+            map.current.setTerrain(null as any);
+            initLayers(map.current,overlay_layer.current,outline_layer.current,editorLayerManager.current);
+            map.current.jumpTo({ center, zoom, pitch, bearing });
+        }
+    }, []);
+
     return (
         <div className="map-root">
             <div ref={mapContainer} className="map-container" />
@@ -598,6 +750,54 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(({
                             if (!layer || !(layer instanceof EditLayer)) return;
                             layer.export3DTile(tileKey);
                         }}
+                        onSaveTileToDb={async (tileKey) => {
+                            const layer = editorLayerManager.current?.layer_cache.get(treeData.layerId);
+                            if (!layer || !(layer instanceof EditLayer)) return;
+                            const buffer = await layer.export3DTileToBuffer(tileKey);
+                            if (!buffer) { console.error('export buffer failed'); return; }
+                            const blob = new Blob([buffer], { type: 'application/octet-stream' });
+                            const formData = new FormData();
+                            formData.append('file', blob, `${tileKey.replace(/\//g, '_')}.glb`);
+                            const resourceUrl = import.meta.env.VITE_RESOURCE_API_URL;
+                            const fileName = tileKey.replace(/\//g, '_');
+                            try {
+                                const res = await fetch(`${resourceUrl}/batched_models/${fileName}.glb`, {
+                                    method: 'POST',
+                                    body: formData,
+                                });
+                                if (res.ok) {
+                                    alert(`Upload tile ${tileKey} thành công!`);
+                                } else {
+                                    alert(`Upload tile ${tileKey} thất bại! Status: ${res.status}`);
+                                }
+                            } catch (err) {
+                                alert(`Upload tile ${tileKey} lỗi: ${err}`);
+                            }
+                        }}
+                        onUpdateTileToDb={async (tileKey) => {
+                            const layer = editorLayerManager.current?.layer_cache.get(treeData.layerId);
+                            if (!layer || !(layer instanceof EditLayer)) return;
+                            const buffer = await layer.export3DTileToBuffer(tileKey);
+                            if (!buffer) { console.error('export buffer failed'); return; }
+                            const blob = new Blob([buffer], { type: 'application/octet-stream' });
+                            const formData = new FormData();
+                            formData.append('file', blob, `${tileKey.replace(/\//g, '_')}.glb`);
+                            const resourceUrl = import.meta.env.VITE_RESOURCE_API_URL;
+                            const fileName = tileKey.replace(/\//g, '_');
+                            try {
+                                const res = await fetch(`${resourceUrl}/batched_models/${fileName}.glb`, {
+                                    method: 'PUT',
+                                    body: formData,
+                                });
+                                if (res.ok) {
+                                    alert(`Update tile ${tileKey} thành công!`);
+                                } else {
+                                    alert(`Update tile ${tileKey} thất bại! Status: ${res.status}`);
+                                }
+                            } catch (err) {
+                                alert(`Update tile ${tileKey} lỗi: ${err}`);
+                            }
+                        }}
                     />
                     {showPalette && (
                         <ObjectPalette
@@ -610,8 +810,8 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(({
                                 console.log('texture select', slot, textureName, textureUrl);
                                 console.log('current layer:', layer);
                                 console.log('picked object:', obj?.userData);
-                                if(!layer || !(layer instanceof EditLayer)) return; 
-                                layer.bindTextureToObject(slot,pickedObject.current?.userData as UserData,textureUrl)
+                                if (!layer || !(layer instanceof EditLayer)) return;
+                                layer.bindTextureToObject(slot, pickedObject.current?.userData as UserData, textureUrl)
                             }}
                         />
                     )}
@@ -706,32 +906,40 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(({
                                 setToast({ msg: 'Save error: network failure', type: 'error' });
                             });
                     }}
-                    onDeleteFromDb={(props)=>{
-                        if(!props.gid) return; 
+                    onDeleteFromDb={(props) => {
+                        if (!props.gid) return;
                         deleteModelFromDb(props.gid)
-                        .then(async res => {
-                            if(res.ok){
-                                overlay_layer.current?.unselect();
-                                outline_layer.current?.unselect();
-                                pickedObject.current = null;
-                                if (map.current) (map.current as any)._selectedObject = null;
-                                setSelectedProps(null);
-                                try {
-                                    const map4dLayer = editorLayerManager.current?.layer_cache.get(MAP4D_LAYER_ID) as Map4DModelsThreeLayer | undefined;
-                                    map4dLayer?.getVectorSource()?.clearCache();
-                                } catch (e) {
-                                    console.warn('clearCache failed:', e);
+                            .then(async res => {
+                                if (res.ok) {
+                                    overlay_layer.current?.unselect();
+                                    outline_layer.current?.unselect();
+                                    pickedObject.current = null;
+                                    if (map.current) (map.current as any)._selectedObject = null;
+                                    setSelectedProps(null);
+                                    try {
+                                        const map4dLayer = editorLayerManager.current?.layer_cache.get(MAP4D_LAYER_ID) as Map4DModelsThreeLayer | undefined;
+                                        map4dLayer?.getVectorSource()?.clearCache();
+                                    } catch (e) {
+                                        console.warn('clearCache failed:', e);
+                                    }
+                                    setToast({ msg: 'Deleted successfully', type: 'success' });
+                                } else {
+                                    setToast({ msg: `Delete failed: ${res.status}`, type: 'error' });
                                 }
-                                setToast({ msg: 'Deleted successfully', type: 'success' });
-                            }else {
-                                setToast({ msg: `Delete failed: ${res.status}`, type: 'error' });
-                            }
-                        })
+                            })
                     }}
                 />
             )}
 
-            <GraphicsSettings onChange={handleGraphicsChange} onToggleBoundaries={handleToggleBoundaries} />
+            <GraphicsSettings
+                onChange={handleGraphicsChange}
+                onToggleBoundaries={handleToggleBoundaries}
+                onToggleStyleLayers={handleToggleStyleLayers}
+                onToggleTerrain={handleToggleTerrain}
+                onJumpTo={(bm) => {
+                    map.current?.jumpTo({ center: bm.center, zoom: bm.zoom, pitch: bm.pitch });
+                }}
+            />
             {toast && (
                 <div
                     style={{
@@ -747,7 +955,7 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(({
                 </div>
             )}
             {showNodeEditor && (
-                <Suspense fallback={<div style={{position:'fixed',inset:0,zIndex:9999,background:'#1e1e1e',color:'#fff',display:'flex',alignItems:'center',justifyContent:'center'}}>Loading...</div>}>
+                <Suspense fallback={<div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: '#1e1e1e', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>Loading...</div>}>
                     <Editor onClose={() => setShowNodeEditor(false)} map={map.current} />
                 </Suspense>
             )}

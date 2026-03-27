@@ -1,5 +1,5 @@
 import {useState} from 'react';
-import {ChevronDown, Box, X, Download} from 'lucide-react';
+import {ChevronDown, Box, X, Download, DatabaseBackup, RefreshCw} from 'lucide-react';
 import './ObjectTreePanel.css';
 
 export interface TileNode {
@@ -13,9 +13,11 @@ interface Props {
     onClose: () => void;
     onSelectObject?: (tileKey: string, objectIndex: number) => void;
     onExportTile?: (tileKey: string) => void;
+    onSaveTileToDb?: (tileKey: string) => void;
+    onUpdateTileToDb?: (tileKey: string) => void;
 }
 
-export const ObjectTreePanel = ({layerId, tiles, onClose, onSelectObject, onExportTile}: Props) => {
+export const ObjectTreePanel = ({layerId, tiles, onClose, onSelectObject, onExportTile, onSaveTileToDb, onUpdateTileToDb}: Props) => {
     const [collapsedTiles, setCollapsedTiles] = useState<Set<string>>(new Set());
     const [selectedObj, setSelectedObj] = useState<string | null>(null);
 
@@ -63,6 +65,30 @@ export const ObjectTreePanel = ({layerId, tiles, onClose, onSelectObject, onExpo
                                             }}
                                         >
                                             <Download size={12} strokeWidth={2}/>
+                                        </button>
+                                    )}
+                                    {onSaveTileToDb && (
+                                        <button
+                                            className="otp-export-btn"
+                                            title="Save tile to DB"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                onSaveTileToDb(tile.tileKey);
+                                            }}
+                                        >
+                                            <DatabaseBackup size={12} strokeWidth={2}/>
+                                        </button>
+                                    )}
+                                    {onUpdateTileToDb && (
+                                        <button
+                                            className="otp-export-btn"
+                                            title="Update tile to DB"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                onUpdateTileToDb(tile.tileKey);
+                                            }}
+                                        >
+                                            <RefreshCw size={12} strokeWidth={2}/>
                                         </button>
                                     )}
                                     <span className="otp-tile-count">{tile.objects.length}</span>

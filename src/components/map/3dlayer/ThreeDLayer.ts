@@ -23,12 +23,14 @@ import {
 import {parseLayerTileInfo} from '../tile/tile.ts';
 import {createBuildingGroup, createShadowGroup, transformModel, applyShadowLitMaterial} from '../model/objModel.ts'
 import {MaplibreShadowMesh} from "../shadow/ShadowGeometry.ts";
-import {CustomVectorSource} from "../source/CustomVectorSource.ts"
+import type {VectorSourceLike} from "../source/SourceInterface.ts"
 import {ModelFetch} from "./ModelFetch.ts";
 import {ShadowLitMaterial} from "../shadow/ShadowLitMaterial.ts";
 import {ShadowMapPass,getSharedShadowPass} from "../shadow/ShadowMapPass.ts";
 import { getSharedReflectionPass, ReflectionPass } from '../water/ReflectionPass.ts';
 import {getSharedRenderer} from "../SharedRenderer.ts";
+import {createMapLibreMatrix, calculateTileMatrixThree} from '../shadow/ShadowCamera.ts';
+import {projectToWorldCoordinates} from '../convert/map_convert.ts';
 
 /** Config cho layer */
 export type Map4DModelsLayerOptions = {
@@ -63,6 +65,8 @@ type TileCacheEntry = DataTileInfo & {
     shadowLitMaterials: ShadowLitMaterial[];
     addedIds: Set<string>;
     isFullObject: boolean;
+    /** elevation was set with incomplete terrain data — needs re-apply */
+    needsElevationUpdate: boolean;
 };
 
 export type ModelCacheEntry = ModelData & {
@@ -85,7 +89,7 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer,
     private map: maplibregl.Map | null = null;
     private renderer: THREE.WebGLRenderer | null = null;
     private camera: THREE.Camera | null = null;
-    private vectorSource: CustomVectorSource | null = null;
+    private source: VectorSourceLike | null = null;
     private readonly rootUrl: string;
     private minZoom: number;
     private maxZoom: number;
@@ -98,9 +102,10 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer,
     private _currentZoom = 0;
     private readonly _tmpLightDir = new THREE.Vector3();
     private readonly clock = new THREE.Clock();
+    private _viewProjMatrix: THREE.Matrix4 = new THREE.Matrix4();
     //shadow
     private shadowMapPass: ShadowMapPass | null = null;
-    private reflectionPass : ReflectionPass | null = null; 
+    private reflectionPass : ReflectionPass | null = null;
 
 
 
@@ -142,12 +147,33 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer,
     }
 
     prerender(_gl: WebGLRenderingContext, _args: CustomRenderMethodInput): void {
-        if (!this.map || !this.vectorSource) {
+        if (!this.map || !this.source) {
             return;
         }
+        if (this.map.getZoom() < this.minZoom) return;
+        const tr = this.map.transform as any;
+        const point = projectToWorldCoordinates(tr.worldSize, {
+            lat: tr.center.lat,
+            lon: tr.center.lng,
+        });
+        this._viewProjMatrix = createMapLibreMatrix(
+            tr.fovInRadians,
+            tr.width,
+            tr.height,
+            tr.nearZ,
+            tr.farZ * 2.0,
+            tr.cameraToCenterDistance,
+            tr.rollInRadians,
+            tr.pitchInRadians,
+            tr.bearingInRadians,
+            point.x,
+            point.y,
+            tr.pixelsPerMeter,
+            tr.elevation,
+        );
         this._currentZoom = clampZoom(
-            this.vectorSource.minZoom,
-            this.vectorSource.maxZoom,
+            this.source.minZoom,
+            this.source.maxZoom,
             Math.round(this.map.getZoom())
         );
         this._visibleTiles = this.map.coveringTiles({
@@ -157,7 +183,7 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer,
             roundZoom: true,
         });
         for (const tile of this._visibleTiles) {
-            const vectorTile = this.vectorSource.getTile(tile, {
+            const vectorTile = this.source.getTile(tile, {
                 build_triangle: true,
             });
             const tile_key = this.tileKey(tile);
@@ -172,6 +198,7 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer,
                     tileDataInfo = {
                         sceneTile: scene,
                         isFullObject: false,
+                        needsElevationUpdate: false,
                         shadowsObject : [],
                         shadowLitMaterials: [],
                         addedIds: new Set<string>(),
@@ -215,15 +242,16 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer,
                 }
             }
         }
+        this.updateTileElevations();
     }
 
-    getVectorSource(): CustomVectorSource | null {
-        return this.vectorSource;
+    getVectorSource(): VectorSourceLike | null {
+        return this.source;
     }
 
-    setVectorSource(source: CustomVectorSource): void {
-        this.vectorSource = source;
-        this.vectorSource.registerUnLoadTile((tile_key: string) => {
+    setSource(source: VectorSourceLike): void {
+        this.source = source;
+        this.source.registerUnLoadTile((tile_key: string) => {
             if (this.tileCache.has(tile_key)) {
                 console.log('delete tile key');
                 this.tileCache.delete(tile_key);
@@ -286,20 +314,29 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer,
 
     useOrchestrator = false;
 
-    renderShadowDepth(renderer: THREE.WebGLRenderer, worldSize: number): void {
-        if (!this.shadowMapPass || !this.renderer) return;
-        const tilesWithShadow: TileCacheEntry[] = [];
-        //ignore all shadow mesh
-        for (const tile of this._visibleTiles) {
-            const key = this.tileKey(tile);
-            const tileInfo = this.tileCache.get(key);
-            if (!tileInfo || tileInfo.shadowsObject.length === 0) continue;
-            tilesWithShadow.push(tileInfo);
+    private hideNonDepthMeshes(tiles: OverscaledTileID[]): void {
+        for (const tile of tiles) {
+            const tileInfo = this.tileCache.get(this.tileKey(tile));
+            if (!tileInfo?.sceneTile) continue;
             for (const pair of tileInfo.shadowsObject) {
                 pair.shadowMesh.visible = false;
             }
         }
-        //shadowPass 
+    }
+
+    private showNonDepthMeshes(tiles: OverscaledTileID[]): void {
+        for (const tile of tiles) {
+            const tileInfo = this.tileCache.get(this.tileKey(tile));
+            if (!tileInfo?.sceneTile) continue;
+            for (const pair of tileInfo.shadowsObject) {
+                pair.shadowMesh.visible = true;
+            }
+        }
+    }
+
+    renderShadowDepth(renderer: THREE.WebGLRenderer, worldSize: number): void {
+        if (!this.shadowMapPass || !this.renderer) return;
+        this.hideNonDepthMeshes(this._visibleTiles);
         this.shadowMapPass.shadowPassNoClear(
             renderer,
             this._visibleTiles,
@@ -307,30 +344,13 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer,
             (tile) => this.tileKey(tile),
             (key) => this.tileCache.get(key)?.sceneTile,
         );
-
-        for (const tileInfo of tilesWithShadow) {
-            for (const pair of tileInfo.shadowsObject) {
-                pair.shadowMesh.visible = true;
-            }
-        }
+        this.showNonDepthMeshes(this._visibleTiles);
     }
 
     renderReflection(renderer: THREE.WebGLRenderer, reflectionMatrix: THREE.Matrix4, worldSize: number) : void {
-        //use for render reflection texture 
-        if(!this.reflectionPass || !this.renderer || !this.map) return; 
-        const tilesWithShadow: TileCacheEntry[] = [];
-        const tr = this.map.transform; 
-        //ignore all shadow mesh
-        for (const tile of this._visibleTiles) {
-            const key = this.tileKey(tile);
-            const tileInfo = this.tileCache.get(key);
-            if (!tileInfo || tileInfo.shadowsObject.length === 0) continue;
-            tilesWithShadow.push(tileInfo);
-            for (const pair of tileInfo.shadowsObject) {
-                pair.shadowMesh.visible = false;
-            }
-        }
-        //reflectionPass
+        if(!this.reflectionPass || !this.renderer || !this.map) return;
+        const tr = this.map.transform;
+        this.hideNonDepthMeshes(this._visibleTiles);
         this.reflectionPass.reflectionPass(
             renderer,
             this._visibleTiles,
@@ -346,28 +366,13 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer,
                 };
             },
             tr,
-        ); 
-
-        for (const tileInfo of tilesWithShadow) {
-            for (const pair of tileInfo.shadowsObject) {
-                pair.shadowMesh.visible = true;
-            }
-        }
-
+        );
+        this.showNonDepthMeshes(this._visibleTiles);
     }
 
     shadowPass(tr : any, visibleTiles : OverscaledTileID[]) : void {
         if(!this.shadowMapPass || !this.renderer) return;
-        const tilesWithShadow: TileCacheEntry[] = [];
-        for (const tile of visibleTiles) {
-            const key = this.tileKey(tile);
-            const tileInfo = this.tileCache.get(key);
-            if (!tileInfo || tileInfo.shadowsObject.length === 0) continue;
-            tilesWithShadow.push(tileInfo);
-            for (const pair of tileInfo.shadowsObject) {
-                pair.shadowMesh.visible = false;
-            }
-        }
+        this.hideNonDepthMeshes(visibleTiles);
         this.shadowMapPass.shadowPass(
             this.renderer,
             visibleTiles,
@@ -376,11 +381,7 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer,
             (key) => this.tileCache.get(key)?.sceneTile,
             this.id,
         );
-        for (const tileInfo of tilesWithShadow) {
-            for (const pair of tileInfo.shadowsObject) {
-                pair.shadowMesh.visible = true;
-            }
-        }
+        this.showNonDepthMeshes(visibleTiles);
     }
 
     mainPass(tr : any, visibleTiles : OverscaledTileID[]) : void {
@@ -395,13 +396,10 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer,
             const tile_key = this.tileKey(tile);
             const tileInfo = this.tileCache.get(tile_key);
             if (!tileInfo?.sceneTile) continue;
-            const projectionData = tr.getProjectionData({
-                overscaledTileID: tile,
-                applyGlobeMatrix: this.applyGlobeMatrix,
-            });
+            const tileMatrix = calculateTileMatrixThree(tile.toUnwrapped(), tr.worldSize);
+            this.camera.projectionMatrix = new THREE.Matrix4().multiplyMatrices(this._viewProjMatrix, tileMatrix);
             const light_matrix = this.shadowMapPass.lightMatrices.get(tile_key);
             this.updateShadowLitMaterials(tileInfo, light_matrix, this._tmpLightDir);
-            this.camera.projectionMatrix.fromArray(projectionData.mainMatrix);
             this.renderer.render(tileInfo.sceneTile, this.camera);
         }
     }
@@ -409,7 +407,7 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer,
     
 
     render(_gl: WebGLRenderingContext, _args: CustomRenderMethodInput): void {
-        if (!this.map || !this.camera || !this.renderer || !this.visible || !this.vectorSource) {
+        if (!this.map || !this.camera || !this.renderer || !this.visible || !this.source) {
             return;
         }
         if (this.map.getZoom() < this.minZoom) return;
@@ -664,9 +662,18 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer,
             const scaleUnit = getMetersPerExtentUnit(lat_lon.lat, z);
             const bearing = (object.bearing as number) ?? 0;
             const objectScale = (object.scale as number) ?? 1;
+            let elevationZ = 0;
+            if (this.map?.getTerrain()) {
+                const terrainElev = this.map.queryTerrainElevation([lat_lon.lon, lat_lon.lat]);
+                if (terrainElev !== null) {
+                    elevationZ = terrainElev;
+                } else {
+                    tile.needsElevationUpdate = true;
+                }
+            }
             transformModel(object.localCoordX as number,
                 object.localCoordY as number,
-                0,
+                elevationZ,
                 bearing,
                 objectScale,
                 scaleUnit,
@@ -707,19 +714,22 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer,
                 });
                 cloneObj3d.userData.mixer = mixer;
             }
+            const hasTerrain = !!this.map?.getTerrain();
             cloneObj3d.traverse((child) => {
                 if (child instanceof THREE.Mesh) {
                     const shadowLitMats = applyShadowLitMaterial(child);
                     tile.shadowLitMaterials.push(...shadowLitMats);
-                    const object_shadow = new MaplibreShadowMesh(child);
-                    object_shadow.userData = {
-                        scale_unit: scaleUnit,
-                    };
-                    object_shadow.matrixAutoUpdate = false;
-                    shadow_group?.add(object_shadow);
-                    tile.shadowsObject.push({scaleUnit : scaleUnit,
-                        shadowMesh : object_shadow
-                    }); 
+                    if (!hasTerrain) {
+                        const object_shadow = new MaplibreShadowMesh(child);
+                        object_shadow.userData = {
+                            scale_unit: scaleUnit,
+                        };
+                        object_shadow.matrixAutoUpdate = false;
+                        shadow_group?.add(object_shadow);
+                        tile.shadowsObject.push({scaleUnit : scaleUnit,
+                            shadowMesh : object_shadow
+                        });
+                    }
                 }
             });
             cloneObj3d.traverse(obj => { obj.frustumCulled = false; });
@@ -728,4 +738,39 @@ export class Map4DModelsThreeLayer implements Custom3DTileRenderLayer,
         }
         this.map?.triggerRepaint();
     }
+
+    /** Re-apply terrain elevation to tiles that were placed before terrain loaded */
+    private updateTileElevations(): void {
+        if (!this.map?.getTerrain()) return;
+        for (const tile of this._visibleTiles) {
+            const tileDataInfo = this.tileCache.get(this.tileKey(tile));
+            if (!tileDataInfo || !tileDataInfo.needsElevationUpdate || !tileDataInfo.objects) continue;
+            const building_group = tileDataInfo.sceneTile?.getObjectByName('building_group');
+            if (!building_group) continue;
+            const z = tile.canonical.z;
+            const tileX = tile.canonical.x;
+            const tileY = tile.canonical.y;
+            let allResolved = true;
+            for (const object of tileDataInfo.objects) {
+                const objectId = (object.id as string) || (object.gid as string);
+                if (!objectId) continue;
+                const child = building_group.getObjectByName(objectId);
+                if (!child) continue;
+                const lat_lon = tileLocalToLatLon(z, tileX, tileY, object.localCoordX as number, object.localCoordY as number);
+                const terrainElev = this.map.queryTerrainElevation([lat_lon.lon, lat_lon.lat]);
+                if (terrainElev === null) {
+                    allResolved = false;
+                    continue;
+                }
+                const scaleUnit = getMetersPerExtentUnit(lat_lon.lat, z);
+                const bearing = (object.bearing as number) ?? 0;
+                const objectScale = (object.scale as number) ?? 1;
+                transformModel(object.localCoordX as number, object.localCoordY as number, terrainElev, bearing, objectScale, scaleUnit, child);
+            }
+            if (allResolved) {
+                tileDataInfo.needsElevationUpdate = false;
+            }
+        }
+    }
+
 }

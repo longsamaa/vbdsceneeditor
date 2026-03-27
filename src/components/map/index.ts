@@ -75,9 +75,11 @@ export type { OverlayLayerOptions, TransformSnapshot } from './gizmo/OverlayLaye
 // ── Data Source ──
 export { CustomVectorSource } from './source/CustomVectorSource';
 export type { CustomVectorSourceOpts, GetTileOptions } from './source/CustomVectorSource';
+export { CustomGeoJsonSource } from './source/CustomGeoJsonSource';
+export type { CustomGeoJsonSourceOpts, GeoJsonFeature } from './source/CustomGeoJsonSource';
 export { vectorTileToJSON, buildGeo, triangulatePolygonWithHoles } from './source/GeojsonConverter';
 export type { JsonVectorTile, JsonVectorTileLayer, JsonVectorTileFeature } from './source/GeojsonConverter';
-export type { CustomSource } from './source/SourceInterface';
+export type { CustomSource, TileSource, VectorSourceLike, VectorTileData, DataTileState } from './source/SourceInterface';
 
 // ── Coordinate Conversion ──
 export {

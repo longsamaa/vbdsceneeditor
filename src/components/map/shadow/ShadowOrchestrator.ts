@@ -66,8 +66,5 @@ export class ShadowOrchestrator implements CustomLayerInterface {
             if (!caster.visible) continue;
             caster.renderShadowDepth(this.renderer, tr.worldSize);
         }
-
-        // 4. Reset WebGL state after shadow pass
-        this.renderer.resetState();
     }
 }

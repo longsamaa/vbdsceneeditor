@@ -29,7 +29,7 @@ const WALL_TEXTURES: TextureOption[] = [
 
 const TOP_TEXTURES: TextureOption[] = [
     { name: 'Top View', thumbnail: '/textures/top_view.jpg' },
-    { name: 'Tile Grey', thumbnail: '/textures/roof_tile_grey.jpg' },
+    { name: 'Roof Tiles', thumbnail: '/textures/roof_tiles.jpg' },
     { name: 'Metal', thumbnail: '/textures/roof_metal.jpg' },
 ];
 

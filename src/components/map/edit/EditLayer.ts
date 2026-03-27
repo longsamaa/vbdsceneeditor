@@ -566,7 +566,6 @@ export class EditLayer implements Custom3DTileRenderLayer, ShadowCasterLayer, Re
     addPrimitiveToScene(primitiveType: PrimitiveType, lat: number, lon: number, default_scale: number = 5): void {
         if (!this.map) return;
         const group = new THREE.Group();
-        const material = new THREE.MeshStandardMaterial({ color: 0xaaaaaa, roughness: 0.6, metalness: 0.1 });
 
         switch (primitiveType) {
             case 'box': {
@@ -590,7 +589,13 @@ export class EditLayer implements Custom3DTileRenderLayer, ShadowCasterLayer, Re
             }
             case 'cylinder': {
                 const geo = new THREE.CylinderGeometry(0.5, 0.5, 1, 32);
-                const mesh = new THREE.Mesh(geo, material);
+                const cylWallMat = new THREE.MeshStandardMaterial({ color: 'blue' });
+                cylWallMat.name = 'wall';
+                const cylTopMat = new THREE.MeshStandardMaterial({ color: 'red' });
+                cylTopMat.name = 'top';
+                // CylinderGeometry groups: 0=side, 1=top, 2=bottom
+                const cylMaterials = [cylWallMat, cylTopMat, cylWallMat];
+                const mesh = new THREE.Mesh(geo, cylMaterials);
                 mesh.position.y = 0.5;
                 group.add(mesh);
                 break;
@@ -598,7 +603,15 @@ export class EditLayer implements Custom3DTileRenderLayer, ShadowCasterLayer, Re
             case 'gable-roof': {
                 // Base box
                 const baseGeo = new THREE.BoxGeometry(1, 0.5, 1);
-                const baseMesh = new THREE.Mesh(baseGeo, material);
+                const gableWallMat = new THREE.MeshStandardMaterial({ color: 'blue' });
+                gableWallMat.name = 'wall';
+                const gableTopMat = new THREE.MeshStandardMaterial({ color: 'red' });
+                gableTopMat.name = 'top';
+                const baseMaterials = [
+                    gableWallMat, gableWallMat, gableTopMat,
+                    gableWallMat, gableWallMat, gableWallMat,
+                ];
+                const baseMesh = new THREE.Mesh(baseGeo, baseMaterials);
                 baseMesh.position.y = 0.25;
                 group.add(baseMesh);
                 // Roof prism using ExtrudeGeometry
@@ -608,7 +621,8 @@ export class EditLayer implements Custom3DTileRenderLayer, ShadowCasterLayer, Re
                 roofShape.lineTo(0.5, 0);
                 roofShape.lineTo(-0.5, 0);
                 const roofGeo = new THREE.ExtrudeGeometry(roofShape, { depth: 1, bevelEnabled: false });
-                const roofMat = new THREE.MeshStandardMaterial({ color: 0xcc8855, roughness: 0.7, metalness: 0.05 });
+                const roofMat = new THREE.MeshStandardMaterial({ color: 0xcc8855 });
+                roofMat.name = 'top';
                 const roofMesh = new THREE.Mesh(roofGeo, roofMat);
                 roofMesh.position.set(0, 0.5, -0.5);
                 group.add(roofMesh);
@@ -884,6 +898,75 @@ export class EditLayer implements Custom3DTileRenderLayer, ShadowCasterLayer, Re
         }
     }
 
+    export3DTileToBuffer(tileKey: string): Promise<ArrayBuffer | null> {
+        const tile = this.tileCache.get(tileKey);
+        if (!tile) return Promise.resolve(null);
+        const scene = tile.sceneTile;
+        if (!scene) return Promise.resolve(null);
+        const shadowMeshes: MaplibreShadowMesh[] = [];
+        scene.children.forEach((child) => {
+            if (child instanceof MaplibreShadowMesh) shadowMeshes.push(child);
+        });
+        shadowMeshes.forEach((m) => scene.remove(m));
+        const userDataCache = new Map<THREE.Object3D, Record<string, any>>();
+        const materialCache = new Map<THREE.Mesh, THREE.Material | THREE.Material[]>();
+        const animations: THREE.AnimationClip[] = [];
+        const colorCache = new Map<THREE.MeshStandardMaterial, THREE.Color>();
+        scene.traverse((obj) => {
+            userDataCache.set(obj, obj.userData);
+            if (obj instanceof THREE.Mesh && obj.userData._originMat) {
+                materialCache.set(obj, obj.material);
+                obj.material = obj.userData._originMat;
+                const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+                for (const m of mats) {
+                    if (m instanceof THREE.MeshStandardMaterial && m.map) {
+                        colorCache.set(m, m.color.clone());
+                        m.color.set(1, 1, 1);
+                    }
+                }
+            }
+            if (obj.userData?.animations) {
+                (obj.userData.animations as THREE.AnimationClip[]).forEach((clip) => animations.push(clip));
+            }
+            obj.userData = {};
+        });
+        const restore = () => {
+            userDataCache.forEach((data, obj) => { obj.userData = data; });
+            materialCache.forEach((mat, mesh) => { mesh.material = mat; });
+            colorCache.forEach((color, mat) => { mat.color.copy(color); });
+            shadowMeshes.forEach((m) => scene.add(m));
+        };
+        return new Promise((resolve) => {
+            const exporter = new GLTFExporter();
+            exporter.parse(
+                scene,
+                (result) => {
+                    restore();
+                    if (result instanceof ArrayBuffer) {
+                        resolve(result);
+                    } else {
+                        const json = JSON.stringify(result);
+                        const encoder = new TextEncoder();
+                        resolve(encoder.encode(json).buffer as ArrayBuffer);
+                    }
+                },
+                (error) => {
+                    console.error('Export to buffer error:', error);
+                    restore();
+                    resolve(null);
+                },
+                {
+                    binary: true,
+                    trs: false,
+                    onlyVisible: true,
+                    truncateDrawRange: true,
+                    embedImages: true,
+                    maxTextureSize: 1024,
+                }
+            );
+        });
+    }
+
     export3DTile(tileKey: string): void {
         const tile = this.tileCache.get(tileKey);
         if (!tile) return;
@@ -899,14 +982,19 @@ export class EditLayer implements Custom3DTileRenderLayer, ShadowCasterLayer, Re
         const userDataCache = new Map<THREE.Object3D, Record<string, any>>();
         const materialCache = new Map<THREE.Mesh, THREE.Material | THREE.Material[]>();
         const animations: THREE.AnimationClip[] = [];
+        const colorCache = new Map<THREE.MeshStandardMaterial, THREE.Color>();
         scene.traverse((obj) => {
             userDataCache.set(obj, obj.userData);
-            if (obj instanceof THREE.Mesh) {
-                console.log(obj.userData._originMat);
-            }
             if (obj instanceof THREE.Mesh && obj.userData._originMat) {
                 materialCache.set(obj, obj.material);
                 obj.material = obj.userData._originMat;
+                const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+                for (const m of mats) {
+                    if (m instanceof THREE.MeshStandardMaterial && m.map) {
+                        colorCache.set(m, m.color.clone());
+                        m.color.set(1, 1, 1);
+                    }
+                }
             }
             if (obj.userData?.animations) {
                 (obj.userData.animations as THREE.AnimationClip[]).forEach((clip) => animations.push(clip));
@@ -914,12 +1002,9 @@ export class EditLayer implements Custom3DTileRenderLayer, ShadowCasterLayer, Re
             obj.userData = {};
         });
         const restore = () => {
-            userDataCache.forEach((data, obj) => {
-                obj.userData = data;
-            });
-            materialCache.forEach((mat, mesh) => {
-                mesh.material = mat;
-            });
+            userDataCache.forEach((data, obj) => { obj.userData = data; });
+            materialCache.forEach((mat, mesh) => { mesh.material = mat; });
+            colorCache.forEach((color, mat) => { mat.color.copy(color); });
             shadowMeshes.forEach((m) => scene.add(m));
         };
 

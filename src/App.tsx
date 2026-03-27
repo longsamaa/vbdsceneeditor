@@ -12,7 +12,7 @@ function App() {
     return (
         <div className="App">
             <MapView
-                center={[106.72175267314215,10.794890570908446]}
+                center={[107.08311546024306, 10.326704491011832]}
                 zoom={17}
                 ref={mapHandleRef}
             />

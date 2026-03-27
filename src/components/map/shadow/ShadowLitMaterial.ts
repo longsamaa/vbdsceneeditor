@@ -1,10 +1,10 @@
 import * as THREE from 'three';
 
-//Depth material để ghi depth vào buffer 
+//Depth material để ghi depth vào buffer
 export class ShadowDepthMaterial extends THREE.ShaderMaterial {
     constructor() {
         super({
-            side: THREE.DoubleSide,
+            side: THREE.BackSide,
             depthWrite: true,
             polygonOffset: true,
             polygonOffsetFactor: 4,
@@ -42,37 +42,37 @@ export class ShadowLitMaterial extends THREE.ShaderMaterial {
             side: THREE.DoubleSide,
             clipping: true,
             polygonOffset: true,
-            polygonOffsetFactor: 2,
-            polygonOffsetUnits: 2,
+            polygonOffsetFactor: 1,
+            polygonOffsetUnits: 1,
             uniforms: {
-                shadowMap:     { value: shadowMap?.texture ?? null },
-                lightMatrix:   { value: new THREE.Matrix4() },
-                lightDir:      { value: new THREE.Vector3() },
+                shadowMap: { value: shadowMap?.texture ?? null },
+                lightMatrix: { value: new THREE.Matrix4() },
+                lightDir: { value: new THREE.Vector3() },
                 shadowMapSize: { value: new THREE.Vector2(8192, 8192) },
-                hasShadowMap:  { value: 0 },
-                baseMap:       { value: null as THREE.Texture | null },
-                hasBaseMap:    { value: 0 },
-                alphaMap:      { value: null as THREE.Texture | null },
-                hasAlphaMap:   { value: 0 },
-                alphaTest:     { value: 0.0 },
-                baseColor:     { value: new THREE.Color(1, 1, 1) },
-                colorLift:     { value: 0.0 },
-                ambient:       { value: 0.8 },
-                diffuseIntensity: { value: 1.0 },
-                uOpacity:      { value: 1.0 },
+                hasShadowMap: { value: 0 },
+                baseMap: { value: null as THREE.Texture | null },
+                hasBaseMap: { value: 0 },
+                alphaMap: { value: null as THREE.Texture | null },
+                hasAlphaMap: { value: 0 },
+                alphaTest: { value: 0.0 },
+                baseColor: { value: new THREE.Color(1, 1, 1) },
+                colorLift: { value: 0.0 },
+                ambient: { value: 0.2 },
+                diffuseIntensity: { value: 0.3 },
+                uOpacity: { value: 1.0 },
                 shadowStrength: { value: 0.8 },
-                lightColor:    { value: new THREE.Color(1.0, 0.96, 0.88) },
-                skyColor:      { value: new THREE.Color(0.85, 0.85, 0.87) },
-                groundColor:   { value: new THREE.Color(0.6, 0.58, 0.56) },
-                shadowColor:   { value: new THREE.Color(0.5, 0.5, 0.52) },
-                fresnelPower:  { value: 4.0 },
-                fresnelScale:  { value: 0.08 },
-                wrapFactor:    { value: 0.3 },
-                biasBase:      { value: 0.00001 },
-                biasSlope:     { value: 0.000001 },
+                lightColor: { value: new THREE.Color(1.0, 0.96, 0.88) },
+                skyColor: { value: new THREE.Color(0.55, 0.55, 0.57) },
+                groundColor: { value: new THREE.Color(0.35, 0.33, 0.31) },
+                shadowColor: { value: new THREE.Color(0.5, 0.5, 0.52) },
+                fresnelPower: { value: 4.0 },
+                fresnelScale: { value: 0.02 },
+                wrapFactor: { value: 0.3 },
+                biasBase: { value:  0.001 },
+                biasSlope: { value: 0.002 },
                 shadowThreshold: { value: 0.6 },
-                clippingPlane:   { value: new THREE.Vector4(0, 0, 0, 0) },
-                useClipping:     { value: 0 },
+                clippingPlane: { value: new THREE.Vector4(0, 0, 0, 0) },
+                useClipping: { value: 0 },
             },
             vertexShader: /* glsl */`
                 uniform mat4 lightMatrix;
@@ -184,7 +184,7 @@ export class ShadowLitMaterial extends THREE.ShaderMaterial {
                     #endif
                     if (hasBaseMap == 1) {
                         vec4 tex = texture2D(baseMap, vUv);
-                        albedo *= tex.rgb;
+                        albedo = tex.rgb;
                         alpha *= tex.a;
                     }
                     if (hasAlphaMap == 1) {
@@ -219,6 +219,11 @@ export class ShadowLitMaterial extends THREE.ShaderMaterial {
                     }
 
                     // --- Shadow sampling ---
+                    // Skip shadow for back-facing surfaces (NdotL < 0)
+                    if (NdotL < -0.1) {
+                        gl_FragColor = vec4(lit, alpha);
+                        return;
+                    }
                     vec3 projCoords = vLightNDC * 0.5 + 0.5;
                     if (projCoords.x < 0.0 || projCoords.x > 1.0 ||
                         projCoords.y < 0.0 || projCoords.y > 1.0 ||
@@ -230,20 +235,18 @@ export class ShadowLitMaterial extends THREE.ShaderMaterial {
                     vec2 texelSize = 1.0 / shadowMapSize;
                     float current = projCoords.z;
                     float shadow = sampleShadowPCF(projCoords,bias);
-                    // for (int y = -2; y <= 2; y++) {
-                    //     for (int x = -2; x <= 2; x++) {
-                    //         float stored = texture2D(shadowMap, projCoords.xy + vec2(x, y) * texelSize).r;
-                    //         shadow += (current - bias > stored) ? 0.0 : 1.0;
-                    //     }
-                    // }
-                    // shadow /= 25.0;
-
+                    for (int y = -2; y <= 2; y++) {
+                        for (int x = -2; x <= 2; x++) {
+                            float stored = texture2D(shadowMap, projCoords.xy + vec2(x, y) * texelSize).r;
+                            shadow += (current - bias > stored) ? 0.0 : 1.0;
+                        }
+                    }
+                    shadow /= 25.0;
                     // --- Shadow with colored tint (blue-ish cool shadow) ---
                     // In shadow: use ambient + shadow color tint instead of just darkening
                     vec3 shadowLit = albedo * (ambientColor * shadowStrength + shadowColor * (1.0 - shadow) * 0.08);
                     vec3 fullLit = albedo * (ambientColor + directLight) + rimLight;
                     vec3 finalColor = mix(shadowLit, fullLit, shadow);
-
                     gl_FragColor = vec4(finalColor, alpha);
                 }
             `,
@@ -323,14 +326,16 @@ export class ShadowLitMaterial extends THREE.ShaderMaterial {
         }
     }
 
-    enableShadowMap(bEnable : boolean) : void {
+    enableShadowMap(bEnable: boolean): void {
         this.uniforms.hasShadowMap.value = bEnable;
     }
 
     /** Call before each mesh render to inject its original texture */
     setMeshMaterial(originalMaterial: THREE.Material | null): void {
         if (!originalMaterial) {
+            this.uniforms.baseMap.value = null;
             this.uniforms.hasBaseMap.value = 0;
+            this.uniforms.alphaMap.value = null;
             this.uniforms.hasAlphaMap.value = 0;
             this.uniforms.alphaTest.value = 0.0;
             this.uniforms.baseColor.value.set(1, 1, 1);
@@ -342,12 +347,14 @@ export class ShadowLitMaterial extends THREE.ShaderMaterial {
             this.uniforms.baseMap.value = mat.map;
             this.uniforms.hasBaseMap.value = 1;
         } else {
+            this.uniforms.baseMap.value = null;
             this.uniforms.hasBaseMap.value = 0;
         }
         if (mat.alphaMap) {
             this.uniforms.alphaMap.value = mat.alphaMap;
             this.uniforms.hasAlphaMap.value = 1;
         } else {
+            this.uniforms.alphaMap.value = null;
             this.uniforms.hasAlphaMap.value = 0;
         }
         if (mat.color) {
@@ -371,25 +378,25 @@ export class ShadowLitMaterial extends THREE.ShaderMaterial {
 export class GroundShadowMaterial extends THREE.ShaderMaterial {
     constructor(shadowMap: THREE.WebGLRenderTarget | null = null) {
         super({
-            side: THREE.DoubleSide,
+            side: THREE.BackSide,
             transparent: true,
             depthWrite: false,
-            polygonOffset: true,
-            polygonOffsetFactor: 4,
-            polygonOffsetUnits: 4,
+            polygonOffset: false,
+            //polygonOffsetFactor: -4,
+            //polygonOffsetUnits: -4,
             stencilWrite: true,
             stencilFunc: THREE.EqualStencilFunc,
             stencilRef: 0,
             stencilZPass: THREE.IncrementStencilOp,
             uniforms: {
-                shadowMap:     { value: shadowMap?.texture ?? null },
-                lightMatrix:   { value: new THREE.Matrix4() },
+                shadowMap: { value: shadowMap?.texture ?? null },
+                lightMatrix: { value: new THREE.Matrix4() },
                 shadowMapSize: { value: new THREE.Vector2(8192, 8192) },
-                hasShadowMap:  { value: 0 },
-                uOpacity:      { value: 1.0 },
+                hasShadowMap: { value: 0 },
+                uOpacity: { value: 1.0 },
                 shadowStrength: { value: 0.8 },
-                biasBase:      { value: 0.0001 },
-                biasSlope:     { value: 0.0 },
+                biasBase: { value: 0.0001 },
+                biasSlope: { value: 0.0 },
             },
             vertexShader: /* glsl */`
                 uniform mat4 lightMatrix;
@@ -471,11 +478,6 @@ export class GroundShadowMaterial extends THREE.ShaderMaterial {
     }
 }
 
-/**
- * Instance flat shadow — dùng MultiplyBlending.
- * Sample building shadow map: nếu pixel đã trong vùng shadow building → output 1.0 (không darkening).
- * Chỉ darkening ở pixel chưa có building shadow → tránh overlap.
- */
 export class InstanceShadowMaterial extends THREE.ShaderMaterial {
     constructor() {
         super({
@@ -489,13 +491,13 @@ export class InstanceShadowMaterial extends THREE.ShaderMaterial {
             stencilRef: 0,
             stencilZPass: THREE.IncrementStencilOp,
             uniforms: {
-                shadowMap:       { value: null as THREE.Texture | null },
-                lightMatrix:     { value: new THREE.Matrix4() },
-                shadowMapSize:   { value: new THREE.Vector2(8192, 8192) },
-                hasShadowMap:    { value: 0 },
+                shadowMap: { value: null as THREE.Texture | null },
+                lightMatrix: { value: new THREE.Matrix4() },
+                shadowMapSize: { value: new THREE.Vector2(8192, 8192) },
+                hasShadowMap: { value: 0 },
                 shadowBrightness: { value: 0.4 },
-                biasBase:        { value: 0.0001 },
-                biasSlope:       { value: 0.000001 },
+                biasBase: { value: 0.0001 },
+                biasSlope: { value: 0.000001 },
             },
             vertexShader: /* glsl */`
                 uniform mat4 lightMatrix;

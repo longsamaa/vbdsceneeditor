@@ -1,5 +1,6 @@
-import { loadModelFromGlb } from '../model/objModel';
+import { loadModelFromGlb, reverseFaceWinding } from '../model/objModel';
 import type { ModelData } from '../Interface';
+import * as THREE from 'three';
 
 export class BatchedModelFetcher {
     private active = 0;
@@ -23,7 +24,14 @@ export class BatchedModelFetcher {
         this.queue.push(() => {
             this.active++;
             loadModelFromGlb(replace_url)
-                .then(cb)
+                .then((model) => {
+                    model.object3d?.traverse((child) => {
+                        if (child instanceof THREE.Mesh) {
+                            reverseFaceWinding(child.geometry);
+                        }
+                    });
+                    cb(model);
+                })
                 .catch(() => {
                     this.failedUrls.add(replace_url);
                     onError?.(replace_url);

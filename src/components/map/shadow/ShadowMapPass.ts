@@ -76,8 +76,8 @@ export class ShadowMapPass {
             snappedX,
             snappedY,
             tr.pixelsPerMeter,
-            shadowW,
-            shadowH,
+            shadowW * 2.0,
+            shadowH * 2.0,
             shadowNear,
             shadowFar,
             shadowDistance,
@@ -177,7 +177,21 @@ export class ShadowMapPass {
             scene.overrideMaterial = null;
         }
         this.renderTarget.endRenderShadowPass(renderer);
-        renderer.resetState();
+    }
+
+    /** Compute light matrices for tiles without rendering into the shadow map */
+    computeLightMatrices(
+        visibleTiles: OverscaledTileID[],
+        worldSize: number,
+        tileKey: (tile: OverscaledTileID) => string,
+    ): void {
+        for (const tile of visibleTiles) {
+            const key = tileKey(tile);
+            if (this.lightMatrices.has(key)) continue;
+            const mat = calculateTileMatrixThree(tile.toUnwrapped(), worldSize);
+            const lightMatrix = this._tmpMatrix.multiplyMatrices(this.shadowMatrix, mat).clone();
+            this.lightMatrices.set(key, lightMatrix);
+        }
     }
 
     resizeShadowMap(size: number): void {

@@ -41,13 +41,13 @@ export class ReflectionPass {
             //cal tile matrix refleciton here
             const key = tileKey(tile);
             const tileData = getSceneAndShadowLitMats(key);
+            if(!tileData?.scene) continue; 
             const shadowLitMats = tileData?.shadowLitMats;
             if(shadowLitMats){
                 for (const mat of shadowLitMats) {
                     mat.enableShadowMap(false); 
                 }
             }
-            if(!tileData?.scene) continue; 
             const projectionData = tr.getProjectionData({
                 overscaledTileID: tile,
                 applyGlobeMatrix: false,
@@ -58,11 +58,10 @@ export class ReflectionPass {
             renderer.render(tileData.scene,this.camera);
             if(shadowLitMats){
                 for (const mat of shadowLitMats) {
-                    mat.enableShadowMap(false); 
+                    mat.enableShadowMap(true); 
                 }
             }
         }
-        //disale shadow map 
         this.renderTarget.endReflectionPass(renderer); 
     }
 

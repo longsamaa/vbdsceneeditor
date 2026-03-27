@@ -11,13 +11,15 @@ import type {
 } from '../Interface.ts'
 import * as THREE from 'three';
 import {InstancedMesh} from 'three';
-import {CustomVectorSource} from "../source/CustomVectorSource.ts"
+import type {VectorSourceLike} from "../source/SourceInterface.ts"
 import {buildShadowMatrix} from "../shadow/ShadowHelper.ts";
 import InstancedGroupMesh from "./InstancedGroupMesh.ts";
 import {ShadowLitMaterial} from "../shadow/ShadowLitMaterial.ts"
 import {ShadowMapPass,getSharedShadowPass} from "../shadow/ShadowMapPass.ts";
 import {getSharedRenderer} from "../SharedRenderer.ts";
 import { getSharedReflectionPass, ReflectionPass } from '../water/ReflectionPass.ts';
+import {createMapLibreMatrix, calculateTileMatrixThree} from '../shadow/ShadowCamera.ts';
+import {projectToWorldCoordinates} from '../convert/map_convert.ts';
 
 export type InstanceLayerOpts = {
     id: string;
@@ -50,7 +52,7 @@ export class InstanceLayer implements Custom3DTileRenderLayer, ShadowCasterLayer
     readonly type = 'custom' as const;
     readonly renderingMode = '3d' as const;
     tileSize: number = 512;
-    private vectorSource: CustomVectorSource | null = null;
+    private vectorSource: VectorSourceLike | null = null;
     private tileCache: Map<string, DataTileInfoForInstanceLayer> = new Map<string, DataTileInfoForInstanceLayer>();
     private objectUrls: string[];
     private shadowMaterial: THREE.Material | null = null;
@@ -58,7 +60,6 @@ export class InstanceLayer implements Custom3DTileRenderLayer, ShadowCasterLayer
     private map: maplibregl.Map | null = null;
     private renderer: THREE.WebGLRenderer | null = null;
     private camera: THREE.Camera | null = null;
-    private applyGlobeMatrix: boolean | false = false;
     private baseMatrix = new THREE.Matrix4();
     private shadowMatrix = new THREE.Matrix4();
     private finalMatrix = new THREE.Matrix4();
@@ -67,7 +68,7 @@ export class InstanceLayer implements Custom3DTileRenderLayer, ShadowCasterLayer
     private maxZoom: number;
     //shadow-pass object //
     private shadowMapPass: ShadowMapPass | null = null;
-    private readonly _projMatrix = new THREE.Matrix4();
+    private _viewProjMatrix: THREE.Matrix4 = new THREE.Matrix4();
     private _visibleTiles: OverscaledTileID[] = [];
     private readonly _tmpLightDir = new THREE.Vector3();
     private reflectionPass : ReflectionPass | null = null; 
@@ -75,7 +76,6 @@ export class InstanceLayer implements Custom3DTileRenderLayer, ShadowCasterLayer
 
     constructor(opts: InstanceLayerOpts & { onPick?: (info: PickHit) => void } & { onPickfail?: () => void }) {
         this.id = opts.id;
-        this.applyGlobeMatrix = opts.applyGlobeMatrix;
         this.onPick = opts.onPick;
         this.onPickfail = opts.onPickfail;
         this.sourceLayer = opts.sourceLayer;
@@ -138,7 +138,7 @@ export class InstanceLayer implements Custom3DTileRenderLayer, ShadowCasterLayer
         this.map = null;
     }
 
-    setVectorSource(source: CustomVectorSource): void {
+    setSource(source: VectorSourceLike): void {
         this.vectorSource = source;
         this.vectorSource.registerUnLoadTile((tile_key: string) => {
             if (this.tileCache.has(tile_key)) {
@@ -185,6 +185,26 @@ export class InstanceLayer implements Custom3DTileRenderLayer, ShadowCasterLayer
             return;
         }
         if (this.map.getZoom() < this.minZoom) return;
+        const tr = this.map.transform as any;
+        const point = projectToWorldCoordinates(tr.worldSize, {
+            lat: tr.center.lat,
+            lon: tr.center.lng,
+        });
+        this._viewProjMatrix = createMapLibreMatrix(
+            tr.fovInRadians,
+            tr.width,
+            tr.height,
+            tr.nearZ,
+            tr.farZ * 2.0,
+            tr.cameraToCenterDistance,
+            tr.rollInRadians,
+            tr.pitchInRadians,
+            tr.bearingInRadians,
+            point.x,
+            point.y,
+            tr.pixelsPerMeter,
+            tr.elevation,
+        );
         const zoom = clampZoom(
             this.vectorSource.minZoom,
             this.vectorSource.maxZoom,
@@ -240,25 +260,29 @@ export class InstanceLayer implements Custom3DTileRenderLayer, ShadowCasterLayer
                     const instancedObject3d = new InstancedGroupMesh(obj3d as THREE.Group, object_count);
                     instancedObject3d.name = `instancedMesh_${key}`;
                     const shadowMeshes: InstancedMesh[] = [];
-                    obj3d.traverse((child) => {
-                        if (child instanceof THREE.Mesh) {
-                            if (this.shadowMaterial) {
-                                const instanceShadow = new InstancedMesh(child.geometry, this.shadowMaterial, object_count);
-                                instanceShadow.frustumCulled = false;
-                                instanceShadow.name = `instanceShadowMesh_${key}`;
-                                tileDataInfo!.sceneTile.add(instanceShadow);
-                                shadowMeshes.push(instanceShadow);
+                    if (!this.map?.getTerrain()) {
+                        obj3d.traverse((child) => {
+                            if (child instanceof THREE.Mesh) {
+                                if (this.shadowMaterial) {
+                                    const instanceShadow = new InstancedMesh(child.geometry, this.shadowMaterial, object_count);
+                                    instanceShadow.frustumCulled = false;
+                                    instanceShadow.name = `instanceShadowMesh_${key}`;
+                                    tileDataInfo!.sceneTile.add(instanceShadow);
+                                    shadowMeshes.push(instanceShadow);
+                                }
                             }
-                        }
-                    });
+                        });
+                    }
                     tileDataInfo!.sceneTile.add(instancedObject3d);
                     instanceGroups.push(instancedObject3d);
                     shadowMeshGroups.push(shadowMeshes);
-                    for (const sm of shadowMeshes) {
-                        tileDataInfo!.instanceShadowPairs.push({
-                            instanceMesh: instancedObject3d,
-                            shadowMesh: sm,
-                        });
+                    if(!this.map?.getTerrain()) {
+                        for (const sm of shadowMeshes) {
+                            tileDataInfo!.instanceShadowPairs.push({
+                                instanceMesh: instancedObject3d,
+                                shadowMesh: sm,
+                            });
+                        }
                     }
                 }
                 const tmpPos = new THREE.Vector3();
@@ -275,8 +299,15 @@ export class InstanceLayer implements Custom3DTileRenderLayer, ShadowCasterLayer
                         point.y,
                     );
                     const scaleUnit = getMetersPerExtentUnit(lat_lon.lat, canonicalID.z);
+                    let elevationZ = 0;
+                    if (this.map?.getTerrain()) {
+                        const terrainElev = this.map.queryTerrainElevation([lat_lon.lon, lat_lon.lat]);
+                        if (terrainElev !== null) {
+                            elevationZ = terrainElev;
+                        }
+                    }
                     tmpScale.set(scaleUnit, -scaleUnit, 1);
-                    tmpPos.set(point.x, point.y, 0);
+                    tmpPos.set(point.x, point.y, elevationZ);
                     tmpQuat.identity();
                     tmpMatrix.compose(tmpPos, tmpQuat, tmpScale);
                     const groupIndex = index % instanceGroups.length;
@@ -345,7 +376,8 @@ export class InstanceLayer implements Custom3DTileRenderLayer, ShadowCasterLayer
     }
 
     renderShadowDepth(renderer: THREE.WebGLRenderer, worldSize: number): void {
-        if (!this.shadowMapPass) return;
+        if (!this.shadowMapPass || !this.map) return;
+        // When terrain is enabled, skip shadow map - use MapLibre flat shadow instead
         for (const tile of this._visibleTiles) {
             const key = this.tileKey(tile.canonical.x, tile.canonical.y, tile.canonical.z);
             const tileInfo = this.tileCache.get(key);
@@ -412,7 +444,8 @@ export class InstanceLayer implements Custom3DTileRenderLayer, ShadowCasterLayer
     }
 
     shadowPass(tr : any, visibleTiles : OverscaledTileID[]) : void {
-        if(!this.shadowMapPass || !this.renderer) return;
+        if(!this.shadowMapPass || !this.renderer || !this.map) return;
+        if (this.map.getTerrain()) return;
         // Ẩn shadow mesh để không render vào depth shadow map
         for (const tile of visibleTiles) {
             const key = this.tileKey(tile.canonical.x, tile.canonical.y, tile.canonical.z);
@@ -453,14 +486,10 @@ export class InstanceLayer implements Custom3DTileRenderLayer, ShadowCasterLayer
         this._tmpLightDir.set(-sd.x, -sd.y, sd.z);
         for (const tile of visibleTiles) {
             const tile_key = this.tileKey(tile.canonical.x, tile.canonical.y, tile.canonical.z);
-            const projectionData = tr.getProjectionData({
-                overscaledTileID: tile,
-                applyGlobeMatrix: this.applyGlobeMatrix,
-            });
             const tileInfo = this.tileCache.get(tile_key);
-            if(!tileInfo?.sceneTile) continue; 
-            const tileMatrix = projectionData.mainMatrix;
-            this.camera.projectionMatrix = this._projMatrix.fromArray(tileMatrix);
+            if(!tileInfo?.sceneTile) continue;
+            const tileMatrix = calculateTileMatrixThree(tile.toUnwrapped(), tr.worldSize);
+            this.camera.projectionMatrix = new THREE.Matrix4().multiplyMatrices(this._viewProjMatrix, tileMatrix);
             const light_matrix = this.shadowMapPass.lightMatrices.get(tile_key);
             this.updateShadowLitMaterials(tileInfo, light_matrix, this._tmpLightDir);
             this.updateShadow(tileInfo);
@@ -472,6 +501,7 @@ export class InstanceLayer implements Custom3DTileRenderLayer, ShadowCasterLayer
         if (!this.map || !this.camera || !this.renderer || !this.visible || !this.vectorSource) {
             return;
         }
+        if (this.map.getZoom() < this.minZoom) return;
         const tr = this.map.transform;
         if (!this.useOrchestrator) {
             this.shadowPass(tr, this._visibleTiles);

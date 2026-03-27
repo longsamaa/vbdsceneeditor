@@ -61,6 +61,9 @@ export function vectorTileToJSON(
         };
         for (let i = 0; i < layer.length; i++) {
             const feature = layer.feature(i);
+            if(feature.properties['height'] !== undefined){
+                console.log('found height in layer:', layerName);
+            }
             const jsonFeature: JsonVectorTileFeature = {
                 id: feature.id,
                 type: featureTypeToString(feature.type),
@@ -139,7 +142,30 @@ export function triangulateRing(ring: number[][]) {
 }
 
 
-export function triangulatePolygonWithHoles(polygon: number[][][]): {
+/**
+ * Densify a ring by subdividing edges longer than maxSegmentLen.
+ */
+function densifyRing(ring: number[][], maxSegmentLen: number): number[][] {
+    const result: number[][] = [];
+    for (let i = 0; i < ring.length; i++) {
+        const a = ring[i];
+        const b = ring[(i + 1) % ring.length];
+        result.push(a);
+        const dx = b[0] - a[0];
+        const dy = b[1] - a[1];
+        const len = Math.sqrt(dx * dx + dy * dy);
+        if (len > maxSegmentLen) {
+            const segments = Math.ceil(len / maxSegmentLen);
+            for (let s = 1; s < segments; s++) {
+                const t = s / segments;
+                result.push([a[0] + dx * t, a[1] + dy * t]);
+            }
+        }
+    }
+    return result;
+}
+
+export function triangulatePolygonWithHoles(polygon: number[][][], maxSegmentLen: number = 0): {
     vertices: number[],
     indices: number[]
 } {
@@ -149,7 +175,8 @@ export function triangulatePolygonWithHoles(polygon: number[][][]): {
         if (ringIndex > 0) {
             holes.push(vertices.length / 2);
         }
-        ring.forEach(([x, y]) => {
+        const densified = maxSegmentLen > 0 ? densifyRing(ring, maxSegmentLen) : ring;
+        densified.forEach(([x, y]) => {
             vertices.push(x, y);
         });
     });

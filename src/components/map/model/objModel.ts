@@ -307,6 +307,7 @@ function convertOneMaterial(origMat: THREE.MeshStandardMaterial, geometry: THREE
     if (origMat.map) {
         shadowMat.uniforms.baseMap.value = origMat.map;
         shadowMat.uniforms.hasBaseMap.value = 1;
+        shadowMat.uniforms.baseColor.value.set(1, 1, 1);
     }
 
     // alpha map (separate alpha texture)
